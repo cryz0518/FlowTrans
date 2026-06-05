@@ -9,7 +9,8 @@ FlowTrans 是一个面向实时语音理解与翻译的 AI 同声传译项目。
 ### 安装依赖
 
 ```powershell
-conda activate ykx
+conda create -n your_name python=3.11
+conda activate your_name
 cd backend
 python -m pip install -e ".[dev]"
 ```
@@ -17,7 +18,7 @@ python -m pip install -e ".[dev]"
 ### 运行测试
 
 ```powershell
-conda activate ykx
+conda activate your_name
 cd backend
 python -m pytest tests/test_health.py -v
 ```
@@ -25,7 +26,7 @@ python -m pytest tests/test_health.py -v
 ### 启动服务
 
 ```powershell
-conda activate ykx
+conda activate your_name
 cd backend
 python -m uvicorn app.main:app --reload
 ```
