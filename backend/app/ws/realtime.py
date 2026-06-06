@@ -1,5 +1,6 @@
 import inspect
 import logging
+import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -17,12 +18,43 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _subtitle_event_from_result(session_id: str, sequence: int, result) -> dict:
+    event_type = "final" if result.is_final else "partial"
+    return {
+        "event_id": f"{session_id}-asr-{sequence}",
+        "session_id": session_id,
+        "event_type": event_type,
+        "source_text": result.source_text,
+        "translated_text": result.translated_text,
+        "replaces_event_id": None,
+        "reason": None,
+    }
+
+
+async def _stream_transcripts(websocket: WebSocket, provider, session_id: str) -> None:
+    sequence = 0
+    while True:
+        result = await provider.receive_transcript_translation()
+        if result is None:
+            await asyncio.sleep(0.05)
+            continue
+        await websocket.send_json(
+            {
+                "type": "subtitle_events",
+                "events": [_subtitle_event_from_result(session_id, sequence, result)],
+            }
+        )
+        sequence += 1
+
+
 @router.websocket("/ws/realtime")
 async def realtime(websocket: WebSocket) -> None:
     await websocket.accept()
     store = SessionStore()
     ingest = AudioIngestService(store)
     provider = None
+    stream_task = None
+    stream_session_id = None
     try:
         provider = create_provider(get_settings())
         pipeline = SubtitlePipeline(provider)
@@ -43,13 +75,27 @@ async def realtime(websocket: WebSocket) -> None:
                     chunk.mime_type,
                     accepted.byte_length,
                 )
-                events = await pipeline.process_chunk(chunk, audio=accepted.payload)
-                logger.info(
-                    "Realtime subtitle events produced: session_id=%s chunk_index=%s count=%s",
-                    chunk.session_id,
-                    chunk.chunk_index,
-                    len(events),
-                )
+                if hasattr(provider, "append_audio") and hasattr(provider, "receive_transcript_translation"):
+                    await provider.append_audio(accepted.payload, chunk.mime_type)
+                    if stream_task is None:
+                        stream_session_id = chunk.session_id
+                        stream_task = asyncio.create_task(_stream_transcripts(websocket, provider, stream_session_id))
+                    await websocket.send_json(
+                        {
+                            "type": "audio_chunk_accepted",
+                            "session_id": chunk.session_id,
+                            "chunk_index": chunk.chunk_index,
+                        }
+                    )
+                    continue
+                else:
+                    events = await pipeline.process_chunk(chunk, audio=accepted.payload)
+                    logger.info(
+                        "Realtime subtitle events produced: session_id=%s chunk_index=%s count=%s",
+                        chunk.session_id,
+                        chunk.chunk_index,
+                        len(events),
+                    )
             except (ValidationError, ValueError, ProviderRuntimeError, DashScopeAsrSessionError) as exc:
                 logger.exception("Realtime chunk processing failed")
                 await websocket.send_json({"type": "error", "message": str(exc)})
@@ -64,6 +110,12 @@ async def realtime(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     finally:
+        if stream_task is not None:
+            stream_task.cancel()
+            try:
+                await stream_task
+            except asyncio.CancelledError:
+                pass
         if provider is not None and hasattr(provider, "close"):
             close_result = provider.close()
             if inspect.isawaitable(close_result):

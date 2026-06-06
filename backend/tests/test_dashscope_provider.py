@@ -46,6 +46,12 @@ class FakeAsrSession:
         self.sent.append({"audio": audio, "mime_type": mime_type})
         return self.transcript
 
+    async def append_audio(self, audio: bytes, mime_type: str) -> None:
+        self.sent.append({"audio": audio, "mime_type": mime_type})
+
+    async def receive_transcript(self) -> AsrTranscript | None:
+        return self.transcript
+
     async def close(self) -> None:
         self.closed = True
 
@@ -123,6 +129,40 @@ async def test_dashscope_provider_uses_asr_transcript_for_translation() -> None:
     assert result.source_text == "Welcome to FlowTrans."
     assert result.translated_text == "欢迎使用 FlowTrans。"
     assert result.is_final is False
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_appends_audio_without_translation() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}}))
+    asr_session = FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=False))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=http_client,
+        asr_session=asr_session,
+    )
+
+    await provider.append_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
+
+    assert asr_session.sent == [{"audio": b"abc", "mime_type": "audio/pcm;rate=16000;channels=1"}]
+    assert http_client.requests == []
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_receives_transcript_translation() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "translated"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=http_client,
+        asr_session=FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=False)),
+    )
+
+    result = await provider.receive_transcript_translation()
+
+    assert result is not None
+    assert result.source_text == "Welcome to FlowTrans."
+    assert result.translated_text == "translated"
+    assert result.is_final is False
+    assert http_client.requests[0]["json"]["model"] == "qwen-plus"
 
 
 @pytest.mark.asyncio

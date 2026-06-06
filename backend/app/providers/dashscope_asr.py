@@ -98,6 +98,10 @@ class DashScopeAsrSession:
             raise DashScopeAsrSessionError("ASR realtime connection failed") from exc
 
     async def send_audio(self, audio: bytes, mime_type: str) -> AsrTranscript | None:
+        await self.append_audio(audio, mime_type)
+        return await self.receive_transcript()
+
+    async def append_audio(self, audio: bytes, mime_type: str) -> None:
         await self.connect()
         assert self._websocket is not None
         try:
@@ -108,7 +112,6 @@ class DashScopeAsrSession:
                     "audio": base64.b64encode(audio).decode("ascii"),
                 }
             )
-            return await self._receive_transcript()
         except DashScopeAsrSessionError:
             raise
         except Exception as exc:
@@ -117,7 +120,7 @@ class DashScopeAsrSession:
                 "ASR realtime request failed; current browser audio format may not be supported"
             ) from exc
 
-    async def _receive_transcript(self) -> AsrTranscript | None:
+    async def receive_transcript(self) -> AsrTranscript | None:
         assert self._websocket is not None
         for _ in range(TRANSCRIPT_RECEIVE_ATTEMPTS):
             try:
