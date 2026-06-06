@@ -1,0 +1,121 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f5f7fb;
+  color: #18202f;
+  font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(1120px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 32px 0;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: 0;
+}
+
+.app-header p {
+  margin: 6px 0 0;
+  color: #5d6679;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-bottom: 16px;
+  color: #39465d;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #9aa6ba;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+
+.panel {
+  border: 1px solid #dce2ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.controls {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 16px;
+}
+
+.source-row {
+  display: grid;
+  gap: 8px;
+}
+
+.source-button,
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid #cbd4e2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #18202f;
+  cursor: pointer;
+}
+
+.source-button.active {
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.primary-button {
+  border-color: #111827;
+  background: #111827;
+  color: #ffffff;
+}
+
+.subtitle-panel {
+  min-height: 420px;
+  padding: 24px;
+}
+
+.subtitle-empty {
+  margin: 0;
+  color: #6b7280;
+}
+
+@media (max-width: 760px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+}
