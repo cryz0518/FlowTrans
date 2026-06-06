@@ -64,6 +64,7 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
     )
 
     assert provider.model_names() == {
+        "asr_endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
         "asr_model": "qwen3-asr-flash-realtime",
         "text_model": "qwen-plus",
         "tts_model": "CosyVoice-v3.5-flash",

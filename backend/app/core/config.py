@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     provider_mode: Literal["fake", "dashscope"] = "dashscope"
     target_language: str = "zh-CN"
     dashscope_api_key: str | None = None
+    dashscope_asr_endpoint: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
     dashscope_asr_model: str = "qwen3-asr-flash-realtime"
     dashscope_text_model: str = "qwen-plus"
     dashscope_tts_model: str = "CosyVoice-v3.5-flash"

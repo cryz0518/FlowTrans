@@ -22,8 +22,13 @@ def test_provider_factory_requires_api_key_for_dashscope() -> None:
 
 
 def test_provider_factory_returns_dashscope_provider() -> None:
-    settings = Settings(provider_mode="dashscope", dashscope_api_key="test-key")
+    settings = Settings(
+        provider_mode="dashscope",
+        dashscope_api_key="test-key",
+        dashscope_asr_endpoint="wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+    )
 
     provider = create_provider(settings)
 
     assert isinstance(provider, DashScopeProvider)
+    assert provider.model_names()["asr_endpoint"] == "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"

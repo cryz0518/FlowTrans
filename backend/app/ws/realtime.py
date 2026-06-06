@@ -1,4 +1,5 @@
 import inspect
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -13,6 +14,7 @@ from app.services.session_store import SessionStore
 from app.services.subtitle_pipeline import SubtitlePipeline
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.websocket("/ws/realtime")
@@ -34,8 +36,22 @@ async def realtime(websocket: WebSocket) -> None:
             try:
                 chunk = AudioChunkIn.model_validate(raw)
                 accepted = ingest.accept_chunk(chunk)
+                logger.info(
+                    "Realtime audio chunk accepted: session_id=%s chunk_index=%s mime_type=%s bytes=%s",
+                    chunk.session_id,
+                    chunk.chunk_index,
+                    chunk.mime_type,
+                    accepted.byte_length,
+                )
                 events = await pipeline.process_chunk(chunk, audio=accepted.payload)
+                logger.info(
+                    "Realtime subtitle events produced: session_id=%s chunk_index=%s count=%s",
+                    chunk.session_id,
+                    chunk.chunk_index,
+                    len(events),
+                )
             except (ValidationError, ValueError, ProviderRuntimeError, DashScopeAsrSessionError) as exc:
+                logger.exception("Realtime chunk processing failed")
                 await websocket.send_json({"type": "error", "message": str(exc)})
                 continue
 

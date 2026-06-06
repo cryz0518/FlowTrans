@@ -1,9 +1,13 @@
 import base64
+import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Protocol
 
 import websockets
+
+logger = logging.getLogger(__name__)
 
 
 class JsonWebSocket(Protocol):
@@ -41,21 +45,21 @@ class _WebsocketsJsonAdapter:
 
 
 async def default_connect(url: str, headers: dict[str, str]) -> JsonWebSocket:
-    websocket = await websockets.connect(url, extra_headers=headers)
+    websocket = await websockets.connect(url, additional_headers=headers)
     return _WebsocketsJsonAdapter(websocket)
 
 
 class DashScopeAsrSession:
-    _base_url = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
-
     def __init__(
         self,
         api_key: str,
         model: str,
+        endpoint: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
         connect: ConnectFn = default_connect,
     ) -> None:
         self._api_key = api_key
         self._model = model
+        self._endpoint = endpoint
         self._connect = connect
         self._websocket: JsonWebSocket | None = None
         self._last_partial = ""
@@ -65,14 +69,25 @@ class DashScopeAsrSession:
             return
         try:
             self._websocket = await self._connect(
-                f"{self._base_url}?model={self._model}",
-                {"Authorization": f"Bearer {self._api_key}"},
+                f"{self._endpoint}?model={self._model}",
+                {
+                    "Authorization": f"Bearer {self._api_key}",
+                    "OpenAI-Beta": "realtime=v1",
+                },
             )
             await self._websocket.send_json(
                 {
                     "type": "session.update",
                     "session": {
-                        "input_audio_format": "webm",
+                        "modalities": ["text"],
+                        "input_audio_format": "pcm",
+                        "sample_rate": 16000,
+                        "input_audio_transcription": {},
+                        "turn_detection": {
+                            "type": "server_vad",
+                            "threshold": 0.0,
+                            "silence_duration_ms": 400,
+                        },
                     },
                 }
             )
@@ -84,13 +99,14 @@ class DashScopeAsrSession:
         await self.connect()
         assert self._websocket is not None
         try:
+            logger.info("Sending ASR audio chunk: bytes=%s mime_type=%s", len(audio), mime_type)
             await self._websocket.send_json(
                 {
                     "type": "input_audio_buffer.append",
                     "audio": base64.b64encode(audio).decode("ascii"),
                 }
             )
-            return self._parse_event(await self._websocket.receive_json())
+            return await self._receive_transcript()
         except DashScopeAsrSessionError:
             raise
         except Exception as exc:
@@ -98,6 +114,22 @@ class DashScopeAsrSession:
             raise DashScopeAsrSessionError(
                 "ASR realtime request failed; current browser audio format may not be supported"
             ) from exc
+
+    async def _receive_transcript(self) -> AsrTranscript | None:
+        assert self._websocket is not None
+        for _ in range(6):
+            try:
+                event = await asyncio.wait_for(self._websocket.receive_json(), timeout=0.8)
+            except TimeoutError:
+                logger.info("ASR receive timed out before transcript event")
+                return None
+            logger.info("ASR event received: type=%s payload=%s", event.get("type"), event)
+            transcript = self._parse_event(event)
+            if transcript is not None:
+                logger.info("ASR transcript parsed: is_final=%s text=%s", transcript.is_final, transcript.text)
+                return transcript
+        logger.info("ASR transcript not found after reading events")
+        return None
 
     async def close(self) -> None:
         websocket = self._websocket
@@ -110,6 +142,18 @@ class DashScopeAsrSession:
 
     def _parse_event(self, event: dict) -> AsrTranscript | None:
         event_type = event.get("type")
+        if event_type == "conversation.item.input_audio_transcription.text":
+            text = f"{event.get('text') or ''}{event.get('stash') or ''}".strip()
+            if not text or text == self._last_partial:
+                return None
+            self._last_partial = text
+            return AsrTranscript(text=text, is_final=False)
+        if event_type == "conversation.item.input_audio_transcription.completed":
+            text = str(event.get("transcript") or "").strip()
+            if not text:
+                return None
+            self._last_partial = ""
+            return AsrTranscript(text=text, is_final=True)
         if event_type == "response.audio_transcript.delta":
             text = str(event.get("delta") or "").strip()
             if not text or text == self._last_partial:
