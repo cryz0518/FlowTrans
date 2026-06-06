@@ -85,6 +85,23 @@ describe("useAudioCapture", () => {
     vi.unstubAllGlobals();
   });
 
+  it("emits low latency pcm chunks every 250ms", async () => {
+    const { processor } = installAudioMocks(16000);
+    const onChunk = vi.fn();
+    const { result } = renderHook(() => useAudioCapture());
+
+    await act(async () => {
+      await result.current.start("microphone", onChunk);
+    });
+
+    act(() => {
+      processor.onaudioprocess?.(makeAudioEvent(new Float32Array(4000).fill(0.25)));
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
   it("stops tracks and closes audio context", async () => {
     const { close, trackStop } = installAudioMocks();
     const { result } = renderHook(() => useAudioCapture());

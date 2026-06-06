@@ -130,6 +130,7 @@ async def test_asr_session_returns_none_when_no_transcript_event_arrives(monkeyp
     )
 
     async def immediate_wait_for(awaitable, timeout: float):
+        assert timeout == 0.25
         return await awaitable
 
     monkeypatch.setattr(asyncio, "wait_for", immediate_wait_for)
@@ -137,6 +138,34 @@ async def test_asr_session_returns_none_when_no_transcript_event_arrives(monkeyp
     transcript = await session.send_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
 
     assert transcript is None
+
+
+@pytest.mark.asyncio
+async def test_asr_session_limits_low_latency_receive_attempts(monkeypatch) -> None:
+    websocket = FakeAsrWebSocket(
+        messages=[
+            {"type": "input_audio_buffer.speech_started"},
+            {"type": "input_audio_buffer.committed"},
+            {"type": "conversation.item.created"},
+        ]
+    )
+    session = DashScopeAsrSession(
+        api_key="test-key",
+        model="qwen3-asr-flash-realtime",
+        connect=FakeConnector(websocket),
+    )
+    timeouts: list[float] = []
+
+    async def immediate_wait_for(awaitable, timeout: float):
+        timeouts.append(timeout)
+        return await awaitable
+
+    monkeypatch.setattr(asyncio, "wait_for", immediate_wait_for)
+
+    transcript = await session.send_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
+
+    assert transcript is None
+    assert timeouts == [0.25, 0.25, 0.25]
 
 
 @pytest.mark.asyncio

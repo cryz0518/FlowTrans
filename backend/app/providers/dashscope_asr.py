@@ -8,6 +8,8 @@ from typing import Awaitable, Callable, Protocol
 import websockets
 
 logger = logging.getLogger(__name__)
+TRANSCRIPT_RECEIVE_ATTEMPTS = 3
+TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS = 0.25
 
 
 class JsonWebSocket(Protocol):
@@ -117,9 +119,12 @@ class DashScopeAsrSession:
 
     async def _receive_transcript(self) -> AsrTranscript | None:
         assert self._websocket is not None
-        for _ in range(6):
+        for _ in range(TRANSCRIPT_RECEIVE_ATTEMPTS):
             try:
-                event = await asyncio.wait_for(self._websocket.receive_json(), timeout=0.8)
+                event = await asyncio.wait_for(
+                    self._websocket.receive_json(),
+                    timeout=TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS,
+                )
             except TimeoutError:
                 logger.info("ASR receive timed out before transcript event")
                 return None
