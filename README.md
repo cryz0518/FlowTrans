@@ -31,15 +31,15 @@ cd backend
 python -m uvicorn app.main:app --reload
 ```
 
-## Environment
+## 环境配置
 
-The local demo uses fake providers by default.
+本地演示默认使用 fake provider，不需要配置真实模型 API Key。
 
 ```powershell
 $env:PROVIDER_MODE="fake"
 ```
 
-To prepare real DashScope/Qwen integration:
+如需准备接入真实 DashScope/Qwen 能力，请配置：
 
 ```powershell
 $env:PROVIDER_MODE="dashscope"
