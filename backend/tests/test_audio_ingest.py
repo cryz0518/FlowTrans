@@ -58,3 +58,44 @@ def test_session_store_tracks_chunk_count() -> None:
     assert session.session_id == "session-a"
     assert session.input_source == "system"
     assert session.chunk_count == 1
+
+
+def test_audio_chunk_rejects_input_source_change_for_existing_session() -> None:
+    store = SessionStore()
+    service = AudioIngestService(store)
+    first = AudioChunkIn(
+        session_id="session-a",
+        chunk_index=0,
+        captured_at_ms=100,
+        input_source="microphone",
+        mime_type="audio/webm",
+        payload_b64=base64.b64encode(b"abc").decode("ascii"),
+    )
+    second = first.model_copy(
+        update={
+            "chunk_index": 1,
+            "captured_at_ms": 200,
+            "input_source": "system",
+        }
+    )
+
+    service.accept_chunk(first)
+
+    with pytest.raises(ValueError, match="input_source cannot change"):
+        service.accept_chunk(second)
+
+
+def test_audio_chunk_rejects_invalid_base64_payload() -> None:
+    store = SessionStore()
+    service = AudioIngestService(store)
+    chunk = AudioChunkIn(
+        session_id="session-a",
+        chunk_index=0,
+        captured_at_ms=100,
+        input_source="microphone",
+        mime_type="audio/webm",
+        payload_b64="not-valid-base64",
+    )
+
+    with pytest.raises(ValueError, match="payload_b64 must be valid base64"):
+        service.accept_chunk(chunk)

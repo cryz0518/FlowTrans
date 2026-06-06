@@ -22,7 +22,10 @@ class SessionStore:
                 session_id=session_id,
                 input_source=input_source,
             )
-        return self._sessions[session_id]
+        session = self._sessions[session_id]
+        if session.input_source != input_source:
+            raise ValueError("input_source cannot change for an existing session")
+        return session
 
     def get_session(self, session_id: str) -> SessionState:
         return self._sessions[session_id]
