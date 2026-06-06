@@ -13,6 +13,7 @@ class FakeResponse:
         self.status_code = status_code
         self._payload = payload
         self.content = content
+        self.text = str(payload)
 
     def json(self) -> dict:
         return self._payload
@@ -57,6 +58,36 @@ class FakeAsrSession:
         self.closed = True
 
 
+class FakeTtsSynthesizer:
+    def __init__(self, audio: bytes | Exception) -> None:
+        self.audio = audio
+        self.calls: list[dict] = []
+
+    def synthesize(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        voice: str,
+        audio_format: str,
+        sample_rate: int,
+        text: str,
+    ) -> bytes:
+        self.calls.append(
+            {
+                "api_key": api_key,
+                "model": model,
+                "voice": voice,
+                "audio_format": audio_format,
+                "sample_rate": sample_rate,
+                "text": text,
+            }
+        )
+        if isinstance(self.audio, Exception):
+            raise self.audio
+        return self.audio
+
+
 def test_dashscope_provider_requires_api_key() -> None:
     with pytest.raises(MissingDashScopeApiKey):
         DashScopeProvider(api_key=None)
@@ -68,7 +99,7 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
         asr_model="qwen3-asr-flash-realtime",
         realtime_text_model="qwen-turbo",
         text_model="qwen-plus",
-        tts_model="CosyVoice-v3.5-flash",
+        tts_model="cosyvoice-v3-flash",
         tts_voice="longxiaochun_v2",
         tts_format="mp3",
         tts_sample_rate=24000,
@@ -79,7 +110,7 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
         "asr_model": "qwen3-asr-flash-realtime",
         "realtime_text_model": "qwen-turbo",
         "text_model": "qwen-plus",
-        "tts_model": "CosyVoice-v3.5-flash",
+        "tts_model": "cosyvoice-v3-flash",
         "tts_voice": "longxiaochun_v2",
     }
 
@@ -254,14 +285,15 @@ async def test_dashscope_provider_uses_stable_model_for_final_transcript() -> No
 
 
 def test_dashscope_provider_synthesizes_speech_with_cosyvoice() -> None:
-    http_client = FakeHttpClient(FakeResponse(200, {}, content=b"audio-bytes"))
+    tts_synthesizer = FakeTtsSynthesizer(b"audio-bytes")
     provider = DashScopeProvider(
         api_key="test-key",
-        tts_model="CosyVoice-v3.5-flash",
-        tts_voice="longxiaochun_v2",
+        tts_model="cosyvoice-v3-flash",
+        tts_voice="longanyang",
         tts_format="mp3",
         tts_sample_rate=24000,
-        http_client=http_client,
+        http_client=FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}})),
+        tts_synthesizer=tts_synthesizer,
     )
 
     result = provider.synthesize_speech("欢迎使用 FlowTrans。")
@@ -270,20 +302,40 @@ def test_dashscope_provider_synthesizes_speech_with_cosyvoice() -> None:
     assert result.mime_type == "audio/mpeg"
     assert result.format == "mp3"
     assert result.sample_rate == 24000
-    request = http_client.requests[0]
-    assert request["url"] == "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-    assert request["headers"]["Authorization"] == "Bearer test-key"
-    assert request["json"] == {
-        "model": "CosyVoice-v3.5-flash",
-        "input": {
-            "text": "欢迎使用 FlowTrans。",
-            "voice": "longxiaochun_v2",
-        },
-        "parameters": {
-            "format": "mp3",
+    assert tts_synthesizer.calls == [
+        {
+            "api_key": "test-key",
+            "model": "cosyvoice-v3-flash",
+            "voice": "longanyang",
+            "audio_format": "mp3",
             "sample_rate": 24000,
-        },
-    }
+            "text": "欢迎使用 FlowTrans。",
+        }
+    ]
+
+
+def test_dashscope_provider_includes_tts_response_error_detail() -> None:
+    tts_synthesizer = FakeTtsSynthesizer(ProviderRuntimeError("voice not found"))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}})),
+        tts_synthesizer=tts_synthesizer,
+    )
+
+    with pytest.raises(ProviderRuntimeError, match="voice not found"):
+        provider.synthesize_speech("欢迎使用 FlowTrans。")
+
+
+def test_dashscope_provider_includes_sdk_tts_error_detail() -> None:
+    tts_synthesizer = FakeTtsSynthesizer(RuntimeError("format is invalid"))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}})),
+        tts_synthesizer=tts_synthesizer,
+    )
+
+    with pytest.raises(ProviderRuntimeError, match="format is invalid"):
+        provider.synthesize_speech("欢迎使用 FlowTrans。")
 
 
 def test_dashscope_provider_rejects_empty_tts_text() -> None:

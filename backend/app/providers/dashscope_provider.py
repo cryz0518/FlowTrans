@@ -29,6 +29,43 @@ class DashScopeTtsResult:
     sample_rate: int
 
 
+class DashScopeTtsSynthesizer:
+    def synthesize(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        voice: str,
+        audio_format: str,
+        sample_rate: int,
+        text: str,
+    ) -> bytes:
+        try:
+            import dashscope
+            from dashscope.audio.tts_v2 import AudioFormat, SpeechSynthesizer
+        except ImportError as exc:
+            raise ProviderRuntimeError("dashscope package is required for CosyVoice TTS") from exc
+
+        dashscope.api_key = api_key
+        audio_format_value = self._audio_format_value(AudioFormat, audio_format, sample_rate)
+        synthesizer = SpeechSynthesizer(
+            model=model,
+            voice=voice,
+            format=audio_format_value,
+        )
+        audio = synthesizer.call(text)
+        if not isinstance(audio, bytes):
+            raise ProviderRuntimeError("DashScope TTS response is invalid")
+        return audio
+
+    def _audio_format_value(self, audio_format_class: Any, audio_format: str, sample_rate: int) -> Any:
+        if audio_format == "mp3" and sample_rate == 24000:
+            return audio_format_class.MP3_24000HZ_MONO_256KBPS
+        if audio_format == "wav" and sample_rate == 24000:
+            return audio_format_class.WAV_24000HZ_MONO_16BIT
+        raise ProviderRuntimeError(f"Unsupported TTS audio format: {audio_format}/{sample_rate}")
+
+
 class DashScopeProvider:
     _endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     _script = [
@@ -44,13 +81,14 @@ class DashScopeProvider:
         asr_model: str = "qwen3-asr-flash-realtime",
         realtime_text_model: str = "qwen-turbo",
         text_model: str = "qwen-plus",
-        tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-        tts_model: str = "CosyVoice-v3.5-flash",
-        tts_voice: str = "longxiaochun_v2",
+        tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer",
+        tts_model: str = "cosyvoice-v3-flash",
+        tts_voice: str = "longanyang",
         tts_format: str = "mp3",
         tts_sample_rate: int = 24000,
         http_client: Any | None = None,
         asr_session: DashScopeAsrSession | None = None,
+        tts_synthesizer: Any | None = None,
     ) -> None:
         if not api_key:
             raise MissingDashScopeApiKey("DASHSCOPE_API_KEY is required when provider_mode is dashscope")
@@ -66,6 +104,7 @@ class DashScopeProvider:
         self._tts_format = tts_format
         self._tts_sample_rate = tts_sample_rate
         self._http_client = http_client or httpx.Client()
+        self._tts_synthesizer = tts_synthesizer or DashScopeTtsSynthesizer()
         self._asr_session = asr_session or DashScopeAsrSession(
             api_key=api_key,
             model=asr_model,
@@ -138,6 +177,30 @@ class DashScopeProvider:
         if not text.strip():
             raise ProviderRuntimeError("TTS text must not be empty")
 
+        if self._tts_synthesizer is not None:
+            try:
+                audio = self._tts_synthesizer.synthesize(
+                    api_key=self._api_key,
+                    model=self._tts_model,
+                    voice=self._tts_voice,
+                    audio_format=self._tts_format,
+                    sample_rate=self._tts_sample_rate,
+                    text=text,
+                )
+            except ProviderRuntimeError:
+                raise
+            except Exception as exc:
+                raise ProviderRuntimeError(f"DashScope TTS request failed: {exc}") from exc
+
+            if not audio:
+                raise ProviderRuntimeError("DashScope TTS response is empty")
+            return DashScopeTtsResult(
+                audio=audio,
+                mime_type=self._mime_type_for_tts_format(self._tts_format),
+                format=self._tts_format,
+                sample_rate=self._tts_sample_rate,
+            )
+
         try:
             response = self._http_client.post(
                 self._tts_endpoint,
@@ -150,8 +213,6 @@ class DashScopeProvider:
                     "input": {
                         "text": text,
                         "voice": self._tts_voice,
-                    },
-                    "parameters": {
                         "format": self._tts_format,
                         "sample_rate": self._tts_sample_rate,
                     },
@@ -162,7 +223,7 @@ class DashScopeProvider:
             raise ProviderRuntimeError("DashScope TTS request failed") from exc
 
         if response.status_code < 200 or response.status_code >= 300:
-            raise ProviderRuntimeError("DashScope TTS request failed")
+            raise ProviderRuntimeError(f"DashScope TTS request failed: {self._response_error_detail(response)}")
         if not response.content:
             raise ProviderRuntimeError("DashScope TTS response is empty")
 
@@ -186,6 +247,18 @@ class DashScopeProvider:
         if audio_format == "wav":
             return "audio/wav"
         return "application/octet-stream"
+
+    def _response_error_detail(self, response: Any) -> str:
+        try:
+            payload = response.json()
+        except Exception:
+            return getattr(response, "text", "")
+
+        if isinstance(payload, dict):
+            message = payload.get("message") or payload.get("error") or payload.get("code")
+            if message:
+                return str(message)
+        return getattr(response, "text", str(payload))
 
     def _call_qwen(self, prompt: str) -> str:
         model = self._next_text_model
