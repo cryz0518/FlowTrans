@@ -65,6 +65,7 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
     provider = DashScopeProvider(
         api_key="test-key",
         asr_model="qwen3-asr-flash-realtime",
+        realtime_text_model="qwen-turbo",
         text_model="qwen-plus",
         tts_model="CosyVoice-v3.5-flash",
     )
@@ -72,6 +73,7 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
     assert provider.model_names() == {
         "asr_endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
         "asr_model": "qwen3-asr-flash-realtime",
+        "realtime_text_model": "qwen-turbo",
         "text_model": "qwen-plus",
         "tts_model": "CosyVoice-v3.5-flash",
     }
@@ -180,6 +182,50 @@ async def test_dashscope_provider_returns_none_for_empty_asr_transcript() -> Non
     )
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_uses_realtime_model_for_partial_transcript() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "partial translation"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(AsrTranscript(text="Welcome", is_final=False)),
+    )
+
+    result = await provider.transcribe_and_translate(
+        chunk_index=0,
+        audio=b"abc",
+        mime_type="audio/webm",
+    )
+
+    assert result is not None
+    assert result.translated_text == "partial translation"
+    assert http_client.requests[0]["json"]["model"] == "qwen-turbo"
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_uses_stable_model_for_final_transcript() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "final translation"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=True)),
+    )
+
+    result = await provider.transcribe_and_translate(
+        chunk_index=0,
+        audio=b"abc",
+        mime_type="audio/webm",
+    )
+
+    assert result is not None
+    assert result.translated_text == "final translation"
+    assert http_client.requests[0]["json"]["model"] == "qwen-plus"
 
 
 @pytest.mark.asyncio

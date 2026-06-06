@@ -34,6 +34,7 @@ class DashScopeProvider:
         api_key: str | None,
         asr_endpoint: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
         asr_model: str = "qwen3-asr-flash-realtime",
+        realtime_text_model: str = "qwen-turbo",
         text_model: str = "qwen-plus",
         tts_model: str = "CosyVoice-v3.5-flash",
         http_client: Any | None = None,
@@ -44,7 +45,9 @@ class DashScopeProvider:
         self._api_key = api_key
         self._asr_endpoint = asr_endpoint
         self._asr_model = asr_model
+        self._realtime_text_model = realtime_text_model
         self._text_model = text_model
+        self._next_text_model = text_model
         self._tts_model = tts_model
         self._http_client = http_client or httpx.Client()
         self._asr_session = asr_session or DashScopeAsrSession(
@@ -57,6 +60,7 @@ class DashScopeProvider:
         return {
             "asr_endpoint": self._asr_endpoint,
             "asr_model": self._asr_model,
+            "realtime_text_model": self._realtime_text_model,
             "text_model": self._text_model,
             "tts_model": self._tts_model,
         }
@@ -75,6 +79,7 @@ class DashScopeProvider:
                 return None
             source_text = transcript.text
             is_final = transcript.is_final
+            self._next_text_model = self._text_model if is_final else self._realtime_text_model
 
         translated_text = self._call_qwen(
             f"请将下面的英文演讲字幕翻译成中文，要求自然、简洁，只输出译文：\n{source_text}"
@@ -119,6 +124,8 @@ class DashScopeProvider:
         return self._script[position]
 
     def _call_qwen(self, prompt: str) -> str:
+        model = self._next_text_model
+        self._next_text_model = self._text_model
         try:
             response = self._http_client.post(
                 self._endpoint,
@@ -127,7 +134,7 @@ class DashScopeProvider:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": self._text_model,
+                    "model": model,
                     "messages": [
                         {
                             "role": "system",
