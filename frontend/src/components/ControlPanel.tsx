@@ -1,11 +1,13 @@
-import { Mic, MonitorUp, Play, Square } from "lucide-react";
+import { Mic, MonitorUp, Play, Square, Volume2 } from "lucide-react";
 
 import type { InputSource } from "../types/events";
 
 type Props = {
   inputSource: InputSource;
   isConnected: boolean;
+  ttsEnabled: boolean;
   onSourceChange: (source: InputSource) => void;
+  onTtsChange: (enabled: boolean) => void;
   onStart: () => void;
   onStop: () => void;
 };
@@ -13,7 +15,9 @@ type Props = {
 export function ControlPanel({
   inputSource,
   isConnected,
+  ttsEnabled,
   onSourceChange,
+  onTtsChange,
   onStart,
   onStop,
 }: Props) {
@@ -37,6 +41,15 @@ export function ControlPanel({
           系统音频
         </button>
       </div>
+      <label className="toggle-row">
+        <Volume2 size={18} />
+        <span>中文语音</span>
+        <input
+          type="checkbox"
+          checked={ttsEnabled}
+          onChange={(event) => onTtsChange(event.target.checked)}
+        />
+      </label>
       <button type="button" className="primary-button" onClick={isConnected ? onStop : onStart}>
         {isConnected ? <Square size={18} /> : <Play size={18} />}
         {isConnected ? "停止" : "开始"}

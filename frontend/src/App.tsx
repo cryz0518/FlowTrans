@@ -15,6 +15,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
 
 export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
+  const [ttsEnabled, setTtsEnabled] = useState(false);
   const chunkIndexRef = useRef(0);
   const session = useRealtimeSession();
   const capture = useAudioCapture();
@@ -54,7 +55,9 @@ export function App() {
         <ControlPanel
           inputSource={inputSource}
           isConnected={isConnected || capture.captureStatus === "recording"}
+          ttsEnabled={ttsEnabled}
           onSourceChange={setInputSource}
+          onTtsChange={setTtsEnabled}
           onStart={start}
           onStop={stop}
         />

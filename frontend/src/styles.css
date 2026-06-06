@@ -145,6 +145,23 @@ button {
   border-left-color: #2563eb;
 }
 
+.toggle-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: #334155;
+}
+
+.subtitle-item.revised {
+  border-left-color: #10b981;
+  background: #ecfdf5;
+  margin-left: -8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 8px;
+}
+
 @media (max-width: 760px) {
   .workbench {
     grid-template-columns: 1fr;
