@@ -83,9 +83,61 @@ describe("useRealtimeSession", () => {
     vi.unstubAllGlobals();
   });
 
-  it("queues final subtitles for TTS playback and clears playback on disconnect", () => {
+  it("does not queue final subtitles when TTS playback is disabled", () => {
     vi.stubGlobal("WebSocket", MockWebSocket);
     const { result } = renderHook(() => useRealtimeSession("ws://test"));
+
+    act(() => result.current.connect());
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.onopen?.());
+    act(() =>
+      socket.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "subtitle_events",
+            events: [
+              {
+                event_id: "a-partial",
+                session_id: "a",
+                event_type: "partial",
+                source_text: "Wel",
+                translated_text: "Wel",
+                replaces_event_id: null,
+                reason: null,
+              },
+              {
+                event_id: "a-final",
+                session_id: "a",
+                event_type: "final",
+                source_text: "Welcome",
+                translated_text: "Welcome.",
+                replaces_event_id: null,
+                reason: null,
+              },
+              {
+                event_id: "a-revision",
+                session_id: "a",
+                event_type: "revision",
+                source_text: "",
+                translated_text: "Welcome to FlowTrans.",
+                replaces_event_id: "a-final",
+                reason: "context revision",
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    const queue = vi.mocked(TtsPlaybackQueue).mock.results[0].value;
+    expect(queue.enqueue).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("queues final subtitles when TTS playback is enabled and clears playback on disconnect", () => {
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    const { result } = renderHook(() => useRealtimeSession("ws://test", { ttsEnabled: true }));
 
     act(() => result.current.connect());
     const socket = MockWebSocket.instances[0];

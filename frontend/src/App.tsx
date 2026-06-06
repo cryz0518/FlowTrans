@@ -11,7 +11,7 @@ export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const chunkIndexRef = useRef(0);
-  const session = useRealtimeSession();
+  const session = useRealtimeSession("ws://127.0.0.1:8000/ws/realtime", { ttsEnabled });
   const capture = useAudioCapture();
   const isConnected = session.connectionStatus === "connected";
 

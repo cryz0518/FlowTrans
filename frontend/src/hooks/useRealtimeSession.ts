@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RealtimeClient } from "../services/realtimeClient";
 import { TtsPlaybackQueue } from "../services/ttsPlaybackQueue";
@@ -6,16 +6,32 @@ import type { AudioChunkOut, SubtitleEvent } from "../types/events";
 
 type ConnectionStatus = "idle" | "connected" | "disconnected" | "error";
 
-export function useRealtimeSession(url = "ws://127.0.0.1:8000/ws/realtime") {
+type RealtimeSessionOptions = {
+  ttsEnabled?: boolean;
+};
+
+export function useRealtimeSession(
+  url = "ws://127.0.0.1:8000/ws/realtime",
+  options: RealtimeSessionOptions = {},
+) {
+  const { ttsEnabled = false } = options;
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [subtitles, setSubtitles] = useState<SubtitleEvent[]>([]);
   const clientRef = useRef<RealtimeClient | null>(null);
   const playbackQueueRef = useRef(new TtsPlaybackQueue());
 
+  useEffect(() => {
+    if (!ttsEnabled) {
+      playbackQueueRef.current.clear();
+    }
+  }, [ttsEnabled]);
+
   const applyEvents = (events: SubtitleEvent[]) => {
-    for (const event of events) {
-      if (event.event_type === "final") {
-        playbackQueueRef.current.enqueue(event.event_id, event.translated_text);
+    if (ttsEnabled) {
+      for (const event of events) {
+        if (event.event_type === "final") {
+          playbackQueueRef.current.enqueue(event.event_id, event.translated_text);
+        }
       }
     }
 
