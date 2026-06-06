@@ -28,6 +28,50 @@ def test_realtime_websocket_accepts_chunk_and_returns_subtitle_event() -> None:
     assert response["events"][0]["event_type"] == "partial"
 
 
+def test_realtime_acknowledges_audio_before_background_subtitle(monkeypatch) -> None:
+    class StreamingProvider:
+        def __init__(self) -> None:
+            self.appended: list[dict] = []
+            self.receive_calls = 0
+
+        async def append_audio(self, audio: bytes, mime_type: str) -> None:
+            self.appended.append({"audio": audio, "mime_type": mime_type})
+
+        async def receive_transcript_translation(self):
+            self.receive_calls += 1
+            if self.receive_calls == 1:
+                return type(
+                    "ProviderResult",
+                    (),
+                    {
+                        "source_text": "Welcome",
+                        "translated_text": "欢迎",
+                        "is_final": False,
+                    },
+                )()
+            return None
+
+        def revise_previous(self, chunk_index: int) -> None:
+            return None
+
+        async def close(self) -> None:
+            return None
+
+    provider = StreamingProvider()
+    monkeypatch.setattr("app.ws.realtime.create_provider", lambda settings: provider)
+    client = TestClient(create_app())
+
+    with client.websocket_connect("/ws/realtime") as websocket:
+        websocket.send_json(make_payload())
+        ack = websocket.receive_json()
+        subtitles = websocket.receive_json()
+
+    assert ack == {"type": "audio_chunk_accepted", "session_id": "session-a", "chunk_index": 0}
+    assert provider.appended == [{"audio": b"abc", "mime_type": "audio/webm"}]
+    assert subtitles["type"] == "subtitle_events"
+    assert subtitles["events"][0]["translated_text"] == "欢迎"
+
+
 def test_realtime_returns_asr_error_and_keeps_connection(monkeypatch) -> None:
     class FailingAsrProvider:
         def __init__(self) -> None:

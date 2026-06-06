@@ -116,6 +116,63 @@ async def test_asr_session_appends_audio_chunk_and_parses_partial() -> None:
 
 
 @pytest.mark.asyncio
+async def test_asr_session_appends_audio_without_waiting_for_transcript() -> None:
+    websocket = FakeAsrWebSocket(
+        messages=[
+            {
+                "type": "conversation.item.input_audio_transcription.text",
+                "text": "Welcome",
+                "stash": "",
+            },
+        ]
+    )
+    session = DashScopeAsrSession(
+        api_key="test-key",
+        model="qwen3-asr-flash-realtime",
+        connect=FakeConnector(websocket),
+    )
+
+    transcript = await session.append_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
+
+    assert transcript is None
+    assert websocket.messages == [
+        {
+            "type": "conversation.item.input_audio_transcription.text",
+            "text": "Welcome",
+            "stash": "",
+        }
+    ]
+    assert websocket.sent[-1] == {
+        "type": "input_audio_buffer.append",
+        "audio": base64.b64encode(b"abc").decode("ascii"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_asr_session_receives_transcript_separately() -> None:
+    websocket = FakeAsrWebSocket(
+        messages=[
+            {"type": "input_audio_buffer.speech_started"},
+            {
+                "type": "conversation.item.input_audio_transcription.text",
+                "text": "Welcome",
+                "stash": "",
+            },
+        ]
+    )
+    session = DashScopeAsrSession(
+        api_key="test-key",
+        model="qwen3-asr-flash-realtime",
+        connect=FakeConnector(websocket),
+    )
+    await session.connect()
+
+    transcript = await session.receive_transcript()
+
+    assert transcript == AsrTranscript(text="Welcome", is_final=False)
+
+
+@pytest.mark.asyncio
 async def test_asr_session_returns_none_when_no_transcript_event_arrives(monkeypatch) -> None:
     websocket = FakeAsrWebSocket(
         messages=[

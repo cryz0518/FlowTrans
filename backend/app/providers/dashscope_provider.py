@@ -85,6 +85,23 @@ class DashScopeProvider:
             is_final=is_final,
         )
 
+    async def append_audio(self, audio: bytes, mime_type: str) -> None:
+        await self._asr_session.append_audio(audio, mime_type)
+
+    async def receive_transcript_translation(self) -> DashScopeProviderResult | None:
+        transcript = await self._asr_session.receive_transcript()
+        if transcript is None:
+            return None
+
+        translated_text = self._call_qwen(
+            f"Please translate the following English speech subtitle into natural concise Chinese. Only output the translation:\n{transcript.text}"
+        )
+        return DashScopeProviderResult(
+            source_text=transcript.text,
+            translated_text=translated_text,
+            is_final=transcript.is_final,
+        )
+
     def revise_previous(self, chunk_index: int) -> str | None:
         if chunk_index != 1:
             return None
