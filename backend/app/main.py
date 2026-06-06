@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
+from app.api.tts import router as tts_router
 from app.core.config import get_settings
 from app.ws.realtime import router as realtime_router
 
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router)
+    app.include_router(tts_router)
     app.include_router(realtime_router)
     return app
 
