@@ -38,12 +38,16 @@ async def _stream_transcripts(websocket: WebSocket, provider, session_id: str) -
         if result is None:
             await asyncio.sleep(0.05)
             continue
-        await websocket.send_json(
-            {
-                "type": "subtitle_events",
-                "events": [_subtitle_event_from_result(session_id, sequence, result)],
-            }
-        )
+        try:
+            await websocket.send_json(
+                {
+                    "type": "subtitle_events",
+                    "events": [_subtitle_event_from_result(session_id, sequence, result)],
+                }
+            )
+        except WebSocketDisconnect:
+            logger.info("Realtime transcript stream stopped after client disconnect")
+            return
         sequence += 1
 
 
