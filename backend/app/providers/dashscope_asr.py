@@ -104,21 +104,20 @@ class DashScopeAsrSession:
     async def append_audio(self, audio: bytes, mime_type: str) -> None:
         await self.connect()
         assert self._websocket is not None
+        logger.info("Sending ASR audio chunk: bytes=%s mime_type=%s", len(audio), mime_type)
         try:
-            logger.info("Sending ASR audio chunk: bytes=%s mime_type=%s", len(audio), mime_type)
-            await self._websocket.send_json(
-                {
-                    "type": "input_audio_buffer.append",
-                    "audio": base64.b64encode(audio).decode("ascii"),
-                }
-            )
+            await self._send_audio_append(audio)
         except DashScopeAsrSessionError:
             raise
         except Exception as exc:
-            self._websocket = None
-            raise DashScopeAsrSessionError(
-                "ASR realtime request failed; current browser audio format may not be supported"
-            ) from exc
+            logger.warning("ASR audio append failed; reconnecting and retrying once")
+            await self._reset_connection()
+            try:
+                await self.connect()
+                await self._send_audio_append(audio)
+            except Exception as retry_exc:
+                await self._reset_connection()
+                raise DashScopeAsrSessionError("ASR realtime connection lost while sending audio") from retry_exc
 
     async def receive_transcript(self) -> AsrTranscript | None:
         assert self._websocket is not None
@@ -147,6 +146,18 @@ class DashScopeAsrSession:
                 await websocket.close()
             except Exception:
                 return
+
+    async def _reset_connection(self) -> None:
+        await self.close()
+
+    async def _send_audio_append(self, audio: bytes) -> None:
+        assert self._websocket is not None
+        await self._websocket.send_json(
+            {
+                "type": "input_audio_buffer.append",
+                "audio": base64.b64encode(audio).decode("ascii"),
+            }
+        )
 
     def _parse_event(self, event: dict) -> AsrTranscript | None:
         event_type = event.get("type")

@@ -12,12 +12,20 @@ from app.providers.dashscope_asr import (
 
 
 class FakeAsrWebSocket:
-    def __init__(self, messages: list[dict] | None = None) -> None:
+    def __init__(
+        self,
+        messages: list[dict] | None = None,
+        fail_audio_append_once: bool = False,
+    ) -> None:
         self.messages = messages or []
+        self.fail_audio_append_once = fail_audio_append_once
         self.sent: list[dict] = []
         self.closed = False
 
     async def send_json(self, payload: dict) -> None:
+        if self.fail_audio_append_once and payload.get("type") == "input_audio_buffer.append":
+            self.fail_audio_append_once = False
+            raise RuntimeError("connection closed")
         self.sent.append(payload)
 
     async def receive_json(self) -> dict:
@@ -30,13 +38,13 @@ class FakeAsrWebSocket:
 
 
 class FakeConnector:
-    def __init__(self, websocket: FakeAsrWebSocket) -> None:
-        self.websocket = websocket
+    def __init__(self, websocket: FakeAsrWebSocket | list[FakeAsrWebSocket]) -> None:
+        self.websockets = websocket if isinstance(websocket, list) else [websocket]
         self.calls: list[dict] = []
 
     async def __call__(self, url: str, headers: dict[str, str]) -> FakeAsrWebSocket:
         self.calls.append({"url": url, "headers": headers})
-        return self.websocket
+        return self.websockets[min(len(self.calls) - 1, len(self.websockets) - 1)]
 
 
 @pytest.mark.asyncio
@@ -146,6 +154,45 @@ async def test_asr_session_appends_audio_without_waiting_for_transcript() -> Non
         "type": "input_audio_buffer.append",
         "audio": base64.b64encode(b"abc").decode("ascii"),
     }
+
+
+@pytest.mark.asyncio
+async def test_asr_session_reconnects_and_retries_when_append_send_fails() -> None:
+    failed_websocket = FakeAsrWebSocket(fail_audio_append_once=True)
+    recovered_websocket = FakeAsrWebSocket()
+    connector = FakeConnector([failed_websocket, recovered_websocket])
+    session = DashScopeAsrSession(
+        api_key="test-key",
+        model="qwen3-asr-flash-realtime",
+        connect=connector,
+    )
+
+    await session.append_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
+
+    assert len(connector.calls) == 2
+    assert failed_websocket.closed is True
+    assert recovered_websocket.sent[0]["type"] == "session.update"
+    assert recovered_websocket.sent[-1] == {
+        "type": "input_audio_buffer.append",
+        "audio": base64.b64encode(b"abc").decode("ascii"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_asr_session_reports_connection_lost_when_append_retry_fails() -> None:
+    failed_websocket = FakeAsrWebSocket(fail_audio_append_once=True)
+    retry_websocket = FakeAsrWebSocket(fail_audio_append_once=True)
+    session = DashScopeAsrSession(
+        api_key="test-key",
+        model="qwen3-asr-flash-realtime",
+        connect=FakeConnector([failed_websocket, retry_websocket]),
+    )
+
+    with pytest.raises(DashScopeAsrSessionError, match="ASR realtime connection lost while sending audio"):
+        await session.append_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
+
+    assert failed_websocket.closed is True
+    assert retry_websocket.closed is True
 
 
 @pytest.mark.asyncio
