@@ -12,7 +12,10 @@ export function SubtitlePanel({ subtitles }: Props) {
       ) : (
         <div className="subtitle-list">
           {subtitles.map((item) => (
-            <article key={item.event_id} className={`subtitle-item ${item.event_type}`}>
+            <article
+              key={item.event_id}
+              className={`subtitle-item ${item.event_type} ${item.reason ? "revised" : ""}`}
+            >
               <p>{item.translated_text}</p>
               {item.source_text ? <small>{item.source_text}</small> : null}
             </article>
