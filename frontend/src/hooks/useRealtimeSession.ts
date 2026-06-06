@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import { RealtimeClient } from "../services/realtimeClient";
+import { TtsPlaybackQueue } from "../services/ttsPlaybackQueue";
 import type { AudioChunkOut, SubtitleEvent } from "../types/events";
 
 type ConnectionStatus = "idle" | "connected" | "disconnected" | "error";
@@ -9,8 +10,15 @@ export function useRealtimeSession(url = "ws://127.0.0.1:8000/ws/realtime") {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [subtitles, setSubtitles] = useState<SubtitleEvent[]>([]);
   const clientRef = useRef<RealtimeClient | null>(null);
+  const playbackQueueRef = useRef(new TtsPlaybackQueue());
 
   const applyEvents = (events: SubtitleEvent[]) => {
+    for (const event of events) {
+      if (event.event_type === "final") {
+        playbackQueueRef.current.enqueue(event.event_id, event.translated_text);
+      }
+    }
+
     setSubtitles((current) => {
       let next = [...current];
       for (const event of events) {
@@ -53,6 +61,7 @@ export function useRealtimeSession(url = "ws://127.0.0.1:8000/ws/realtime") {
 
   const disconnect = () => {
     clientRef.current?.close();
+    playbackQueueRef.current.clear();
     setConnectionStatus("idle");
   };
 
