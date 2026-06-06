@@ -44,9 +44,9 @@ class DashScopeProvider:
         asr_model: str = "qwen3-asr-flash-realtime",
         realtime_text_model: str = "qwen-turbo",
         text_model: str = "qwen-plus",
-        tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer",
-        tts_model: str = "cosyvoice-v3-flash",
-        tts_voice: str = "longanyang",
+        tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        tts_model: str = "CosyVoice-v3.5-flash",
+        tts_voice: str = "longxiaochun_v2",
         tts_format: str = "mp3",
         tts_sample_rate: int = 24000,
         http_client: Any | None = None,
@@ -150,6 +150,8 @@ class DashScopeProvider:
                     "input": {
                         "text": text,
                         "voice": self._tts_voice,
+                    },
+                    "parameters": {
                         "format": self._tts_format,
                         "sample_rate": self._tts_sample_rate,
                     },
@@ -160,7 +162,7 @@ class DashScopeProvider:
             raise ProviderRuntimeError("DashScope TTS request failed") from exc
 
         if response.status_code < 200 or response.status_code >= 300:
-            raise ProviderRuntimeError(f"DashScope TTS request failed: {self._response_error_detail(response)}")
+            raise ProviderRuntimeError("DashScope TTS request failed")
         if not response.content:
             raise ProviderRuntimeError("DashScope TTS response is empty")
 
@@ -184,18 +186,6 @@ class DashScopeProvider:
         if audio_format == "wav":
             return "audio/wav"
         return "application/octet-stream"
-
-    def _response_error_detail(self, response: Any) -> str:
-        try:
-            payload = response.json()
-        except Exception:
-            return getattr(response, "text", "")
-
-        if isinstance(payload, dict):
-            message = payload.get("message") or payload.get("error") or payload.get("code")
-            if message:
-                return str(message)
-        return getattr(response, "text", str(payload))
 
     def _call_qwen(self, prompt: str) -> str:
         model = self._next_text_model

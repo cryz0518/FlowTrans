@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     dashscope_asr_model: str = "qwen3-asr-flash-realtime"
     dashscope_realtime_text_model: str = "qwen-turbo"
     dashscope_text_model: str = "qwen-plus"
-    dashscope_tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
-    dashscope_tts_model: str = "cosyvoice-v3-flash"
-    dashscope_tts_voice: str = "longanyang"
+    dashscope_tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    dashscope_tts_model: str = "CosyVoice-v3.5-flash"
+    dashscope_tts_voice: str = "longxiaochun_v2"
     dashscope_tts_format: str = "mp3"
     dashscope_tts_sample_rate: int = 24000
 
