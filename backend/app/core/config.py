@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     service_name: str = "flowtrans-backend"
-    provider_mode: Literal["fake", "dashscope"] = "fake"
+    provider_mode: Literal["fake", "dashscope"] = "dashscope"
     target_language: str = "zh-CN"
     dashscope_api_key: str | None = None
     dashscope_asr_model: str = "qwen3-asr-flash-realtime"

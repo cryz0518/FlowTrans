@@ -4,7 +4,7 @@ FlowTrans 是一个面向实时语音理解与翻译的 AI 同声传译项目。
 
 ## 本地演示
 
-MVP 可使用 fake provider 本地演示，不需要配置 `DASHSCOPE_API_KEY`。
+MVP 默认使用 DashScope/Qwen 真实链路；如需离线演示，可手动切换到 fake provider。
 
 ### 终端 1：启动后端
 
@@ -60,13 +60,7 @@ npm run build
 
 ## 环境配置
 
-本地演示使用 fake provider：
-
-```powershell
-$env:PROVIDER_MODE="fake"
-```
-
-如需接入 DashScope/Qwen ASR 与文本翻译链路，请配置：
+默认真实链路使用 DashScope/Qwen：
 
 ```powershell
 $env:PROVIDER_MODE="dashscope"
@@ -75,3 +69,11 @@ $env:DASHSCOPE_ASR_MODEL="qwen3-asr-flash-realtime"
 $env:DASHSCOPE_TEXT_MODEL="qwen-plus"
 $env:DASHSCOPE_TTS_MODEL="CosyVoice-v3.5-flash"
 ```
+
+如需离线演示，可切换到 fake provider：
+
+```powershell
+$env:PROVIDER_MODE="fake"
+```
+
+不要把 `DASHSCOPE_API_KEY` 写入代码或提交到仓库。
