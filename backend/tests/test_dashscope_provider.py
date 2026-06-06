@@ -154,6 +154,8 @@ async def test_dashscope_provider_receives_transcript_translation() -> None:
     http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "translated"}}))
     provider = DashScopeProvider(
         api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
         http_client=http_client,
         asr_session=FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=False)),
     )
@@ -164,6 +166,24 @@ async def test_dashscope_provider_receives_transcript_translation() -> None:
     assert result.source_text == "Welcome to FlowTrans."
     assert result.translated_text == "translated"
     assert result.is_final is False
+    assert http_client.requests[0]["json"]["model"] == "qwen-turbo"
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_receives_final_transcript_translation_with_stable_model() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "translated"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=True)),
+    )
+
+    result = await provider.receive_transcript_translation()
+
+    assert result is not None
+    assert result.is_final is True
     assert http_client.requests[0]["json"]["model"] == "qwen-plus"
 
 

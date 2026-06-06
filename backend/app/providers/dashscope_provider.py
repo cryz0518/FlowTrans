@@ -98,6 +98,7 @@ class DashScopeProvider:
         if transcript is None:
             return None
 
+        self._next_text_model = self._text_model if transcript.is_final else self._realtime_text_model
         translated_text = self._call_qwen(
             f"Please translate the following English speech subtitle into natural concise Chinese. Only output the translation:\n{transcript.text}"
         )
