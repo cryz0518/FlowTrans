@@ -3,6 +3,8 @@ from typing import Any
 
 import httpx
 
+from app.providers.dashscope_asr import DashScopeAsrSession
+
 
 class MissingDashScopeApiKey(RuntimeError):
     pass
@@ -34,6 +36,7 @@ class DashScopeProvider:
         text_model: str = "qwen-plus",
         tts_model: str = "CosyVoice-v3.5-flash",
         http_client: Any | None = None,
+        asr_session: DashScopeAsrSession | None = None,
     ) -> None:
         if not api_key:
             raise MissingDashScopeApiKey("DASHSCOPE_API_KEY is required when provider_mode is dashscope")
@@ -42,6 +45,10 @@ class DashScopeProvider:
         self._text_model = text_model
         self._tts_model = tts_model
         self._http_client = http_client or httpx.Client()
+        self._asr_session = asr_session or DashScopeAsrSession(
+            api_key=api_key,
+            model=asr_model,
+        )
 
     def model_names(self) -> dict[str, str]:
         return {
@@ -50,8 +57,21 @@ class DashScopeProvider:
             "tts_model": self._tts_model,
         }
 
-    def transcribe_and_translate(self, chunk_index: int) -> DashScopeProviderResult:
-        source_text, is_final = self._source_text_for_chunk(chunk_index)
+    async def transcribe_and_translate(
+        self,
+        chunk_index: int,
+        audio: bytes | None = None,
+        mime_type: str | None = None,
+    ) -> DashScopeProviderResult | None:
+        if audio is None:
+            source_text, is_final = self._source_text_for_chunk(chunk_index)
+        else:
+            transcript = await self._asr_session.send_audio(audio, mime_type or "application/octet-stream")
+            if transcript is None:
+                return None
+            source_text = transcript.text
+            is_final = transcript.is_final
+
         translated_text = self._call_qwen(
             f"请将下面的英文演讲字幕翻译成中文，要求自然、简洁，只输出译文：\n{source_text}"
         )
@@ -69,6 +89,9 @@ class DashScopeProvider:
             "英文：Welcome to FlowTrans.\n"
             "上下文：We are testing real-time captions."
         )
+
+    async def close(self) -> None:
+        await self._asr_session.close()
 
     def _source_text_for_chunk(self, chunk_index: int) -> tuple[str, bool]:
         position = min(chunk_index, len(self._script) - 1)
@@ -107,7 +130,7 @@ class DashScopeProvider:
             payload = response.json()
             choices = payload["choices"]
             content = choices[0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
+        except (KeyError, IndexError, TypeError):
             try:
                 content = payload["output"]["text"]
             except (KeyError, TypeError) as fallback_exc:

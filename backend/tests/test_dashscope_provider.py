@@ -1,5 +1,6 @@
 import pytest
 
+from app.providers.dashscope_asr import AsrTranscript
 from app.providers.dashscope_provider import (
     DashScopeProvider,
     MissingDashScopeApiKey,
@@ -35,6 +36,20 @@ class FakeHttpClient:
         return self.response
 
 
+class FakeAsrSession:
+    def __init__(self, transcript: AsrTranscript | None) -> None:
+        self.transcript = transcript
+        self.sent: list[dict] = []
+        self.closed = False
+
+    async def send_audio(self, audio: bytes, mime_type: str) -> AsrTranscript | None:
+        self.sent.append({"audio": audio, "mime_type": mime_type})
+        return self.transcript
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 def test_dashscope_provider_requires_api_key() -> None:
     with pytest.raises(MissingDashScopeApiKey):
         DashScopeProvider(api_key=None)
@@ -55,7 +70,8 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
     }
 
 
-def test_dashscope_provider_translates_text_with_qwen() -> None:
+@pytest.mark.asyncio
+async def test_dashscope_provider_translates_text_with_qwen_without_audio() -> None:
     http_client = FakeHttpClient(
         FakeResponse(
             200,
@@ -68,8 +84,9 @@ def test_dashscope_provider_translates_text_with_qwen() -> None:
     )
     provider = DashScopeProvider(api_key="test-key", http_client=http_client)
 
-    result = provider.transcribe_and_translate(0)
+    result = await provider.transcribe_and_translate(0)
 
+    assert result is not None
     assert result.source_text == "Welcome to FlowTrans."
     assert result.translated_text == "欢迎使用 FlowTrans。"
     assert result.is_final is False
@@ -79,9 +96,68 @@ def test_dashscope_provider_translates_text_with_qwen() -> None:
     assert "翻译成中文" in request["json"]["messages"][1]["content"]
 
 
+@pytest.mark.asyncio
+async def test_dashscope_provider_uses_asr_transcript_for_translation() -> None:
+    http_client = FakeHttpClient(
+        FakeResponse(
+            200,
+            {"output": {"text": "欢迎使用 FlowTrans。"}},
+        )
+    )
+    asr_session = FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=False))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=http_client,
+        asr_session=asr_session,
+    )
+
+    result = await provider.transcribe_and_translate(
+        chunk_index=0,
+        audio=b"abc",
+        mime_type="audio/webm",
+    )
+
+    assert asr_session.sent == [{"audio": b"abc", "mime_type": "audio/webm"}]
+    assert result is not None
+    assert result.source_text == "Welcome to FlowTrans."
+    assert result.translated_text == "欢迎使用 FlowTrans。"
+    assert result.is_final is False
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_returns_none_for_empty_asr_transcript() -> None:
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}})),
+        asr_session=FakeAsrSession(None),
+    )
+
+    result = await provider.transcribe_and_translate(
+        chunk_index=0,
+        audio=b"abc",
+        mime_type="audio/webm",
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_closes_asr_session() -> None:
+    asr_session = FakeAsrSession(None)
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}})),
+        asr_session=asr_session,
+    )
+
+    await provider.close()
+
+    assert asr_session.closed is True
+
+
 def test_dashscope_provider_wraps_http_failures() -> None:
     http_client = FakeHttpClient(FakeResponse(500, {"message": "server error"}))
     provider = DashScopeProvider(api_key="test-key", http_client=http_client)
 
     with pytest.raises(ProviderRuntimeError, match="DashScope text model request failed"):
-        provider.transcribe_and_translate(0)
+        provider._call_qwen("Translate this text.")
