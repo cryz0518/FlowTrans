@@ -135,6 +135,60 @@ describe("useRealtimeSession", () => {
     vi.unstubAllGlobals();
   });
 
+  it("replaces duplicate subtitle events with the same event id", () => {
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    const { result } = renderHook(() => useRealtimeSession("ws://test"));
+
+    act(() => result.current.connect());
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.onopen?.());
+    act(() =>
+      socket.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "subtitle_events",
+            events: [
+              {
+                event_id: "browser-session-asr-28",
+                session_id: "browser-session",
+                event_type: "final",
+                source_text: "Welcome",
+                translated_text: "Welcome.",
+                replaces_event_id: null,
+                reason: null,
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+    act(() =>
+      socket.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "subtitle_events",
+            events: [
+              {
+                event_id: "browser-session-asr-28",
+                session_id: "browser-session",
+                event_type: "final",
+                source_text: "Welcome again",
+                translated_text: "Welcome again.",
+                replaces_event_id: null,
+                reason: null,
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(result.current.subtitles).toHaveLength(1);
+    expect(result.current.subtitles[0].event_id).toBe("browser-session-asr-28");
+    expect(result.current.subtitles[0].translated_text).toBe("Welcome again.");
+    vi.unstubAllGlobals();
+  });
+
   it("queues final subtitles when TTS playback is enabled and clears playback on disconnect", () => {
     vi.stubGlobal("WebSocket", MockWebSocket);
     const { result } = renderHook(() => useRealtimeSession("ws://test", { ttsEnabled: true }));

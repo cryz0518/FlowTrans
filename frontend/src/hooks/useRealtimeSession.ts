@@ -45,9 +45,9 @@ export function useRealtimeSession(
               : item,
           );
         } else if (event.event_type === "final") {
-          next = [...next.filter((item) => item.event_type !== "partial"), event];
+          next = [...next.filter((item) => item.event_type !== "partial" && item.event_id !== event.event_id), event];
         } else {
-          next = [...next.filter((item) => item.event_type !== "partial"), event];
+          next = [...next.filter((item) => item.event_type !== "partial" && item.event_id !== event.event_id), event];
         }
       }
       return next;
