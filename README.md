@@ -33,8 +33,11 @@ npm run dev
 - `/ws/realtime` 实时 WebSocket 字幕接口
 - fake provider 字幕演示链路
 - DashScope/Qwen 文本翻译与上下文纠错链路
+- DashScope `qwen3-asr-flash-realtime` 实时 ASR 链路
 
-当前 `PROVIDER_MODE="dashscope"` 时，实时字幕主链路会使用 `qwen-plus` 进行文本翻译与上下文纠错。真实 ASR（`qwen3-asr-flash-realtime`）和 TTS（`CosyVoice-v3.5-flash`）留到后续 PR 接入。
+当前 `PROVIDER_MODE="dashscope"` 时，后端会将浏览器音频 chunk 转发给 `qwen3-asr-flash-realtime`，再把英文转写交给 `qwen-plus` 翻译。前端仍使用浏览器默认录音格式；如果真实识别效果不稳定，后续 PR 会单独接入 PCM 采集。
+
+TTS（`CosyVoice-v3.5-flash`）仍保留为后续独立 PR 接入。
 
 ### 后端测试
 
@@ -63,7 +66,7 @@ npm run build
 $env:PROVIDER_MODE="fake"
 ```
 
-如需接入 DashScope/Qwen 文本翻译链路，请配置：
+如需接入 DashScope/Qwen ASR 与文本翻译链路，请配置：
 
 ```powershell
 $env:PROVIDER_MODE="dashscope"
