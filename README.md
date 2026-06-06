@@ -30,3 +30,13 @@ conda activate your_name
 cd backend
 python -m uvicorn app.main:app --reload
 ```
+
+## Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`.
