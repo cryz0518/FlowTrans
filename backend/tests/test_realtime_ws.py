@@ -1,9 +1,12 @@
 import base64
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.main import create_app
 from app.providers.dashscope_asr import DashScopeAsrSessionError
+from app.ws.realtime import _stream_transcripts
 
 
 def make_payload(chunk_index: int = 0) -> dict:
@@ -17,7 +20,28 @@ def make_payload(chunk_index: int = 0) -> dict:
     }
 
 
-def test_realtime_websocket_accepts_chunk_and_returns_subtitle_event() -> None:
+def test_realtime_websocket_accepts_chunk_and_returns_subtitle_event(monkeypatch) -> None:
+    class NonStreamingProvider:
+        def transcribe_and_translate(
+            self,
+            chunk_index: int,
+            audio: bytes | None = None,
+            mime_type: str | None = None,
+        ):
+            return type(
+                "ProviderResult",
+                (),
+                {
+                    "source_text": "Welcome",
+                    "translated_text": "Welcome.",
+                    "is_final": False,
+                },
+            )()
+
+        def revise_previous(self, chunk_index: int) -> None:
+            return None
+
+    monkeypatch.setattr("app.ws.realtime.create_provider", lambda settings: NonStreamingProvider())
     client = TestClient(create_app())
 
     with client.websocket_connect("/ws/realtime") as websocket:
@@ -149,3 +173,24 @@ def test_realtime_closes_provider_on_disconnect(monkeypatch) -> None:
         websocket.receive_json()
 
     assert provider.closed is True
+
+
+@pytest.mark.asyncio
+async def test_stream_transcripts_exits_when_client_disconnects() -> None:
+    class DisconnectingWebSocket:
+        async def send_json(self, payload: dict) -> None:
+            raise WebSocketDisconnect(code=1006)
+
+    class StreamingProvider:
+        async def receive_transcript_translation(self):
+            return type(
+                "ProviderResult",
+                (),
+                {
+                    "source_text": "Welcome",
+                    "translated_text": "Welcome.",
+                    "is_final": True,
+                },
+            )()
+
+    await _stream_transcripts(DisconnectingWebSocket(), StreamingProvider(), "session-a")
