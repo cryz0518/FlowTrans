@@ -31,7 +31,7 @@ cd backend
 python -m uvicorn app.main:app --reload
 ```
 
-## Frontend
+## 前端
 
 ```powershell
 cd frontend
