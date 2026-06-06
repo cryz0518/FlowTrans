@@ -21,6 +21,14 @@ class DashScopeProviderResult:
     is_final: bool
 
 
+@dataclass(frozen=True)
+class DashScopeTtsResult:
+    audio: bytes
+    mime_type: str
+    format: str
+    sample_rate: int
+
+
 class DashScopeProvider:
     _endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     _script = [
@@ -36,7 +44,11 @@ class DashScopeProvider:
         asr_model: str = "qwen3-asr-flash-realtime",
         realtime_text_model: str = "qwen-turbo",
         text_model: str = "qwen-plus",
+        tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
         tts_model: str = "CosyVoice-v3.5-flash",
+        tts_voice: str = "longxiaochun_v2",
+        tts_format: str = "mp3",
+        tts_sample_rate: int = 24000,
         http_client: Any | None = None,
         asr_session: DashScopeAsrSession | None = None,
     ) -> None:
@@ -48,7 +60,11 @@ class DashScopeProvider:
         self._realtime_text_model = realtime_text_model
         self._text_model = text_model
         self._next_text_model = text_model
+        self._tts_endpoint = tts_endpoint
         self._tts_model = tts_model
+        self._tts_voice = tts_voice
+        self._tts_format = tts_format
+        self._tts_sample_rate = tts_sample_rate
         self._http_client = http_client or httpx.Client()
         self._asr_session = asr_session or DashScopeAsrSession(
             api_key=api_key,
@@ -63,6 +79,7 @@ class DashScopeProvider:
             "realtime_text_model": self._realtime_text_model,
             "text_model": self._text_model,
             "tts_model": self._tts_model,
+            "tts_voice": self._tts_voice,
         }
 
     async def transcribe_and_translate(
@@ -117,12 +134,58 @@ class DashScopeProvider:
             "上下文：We are testing real-time captions."
         )
 
+    def synthesize_speech(self, text: str) -> DashScopeTtsResult:
+        if not text.strip():
+            raise ProviderRuntimeError("TTS text must not be empty")
+
+        try:
+            response = self._http_client.post(
+                self._tts_endpoint,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._tts_model,
+                    "input": {
+                        "text": text,
+                        "voice": self._tts_voice,
+                    },
+                    "parameters": {
+                        "format": self._tts_format,
+                        "sample_rate": self._tts_sample_rate,
+                    },
+                },
+                timeout=30.0,
+            )
+        except Exception as exc:
+            raise ProviderRuntimeError("DashScope TTS request failed") from exc
+
+        if response.status_code < 200 or response.status_code >= 300:
+            raise ProviderRuntimeError("DashScope TTS request failed")
+        if not response.content:
+            raise ProviderRuntimeError("DashScope TTS response is empty")
+
+        return DashScopeTtsResult(
+            audio=response.content,
+            mime_type=self._mime_type_for_tts_format(self._tts_format),
+            format=self._tts_format,
+            sample_rate=self._tts_sample_rate,
+        )
+
     async def close(self) -> None:
         await self._asr_session.close()
 
     def _source_text_for_chunk(self, chunk_index: int) -> tuple[str, bool]:
         position = min(chunk_index, len(self._script) - 1)
         return self._script[position]
+
+    def _mime_type_for_tts_format(self, audio_format: str) -> str:
+        if audio_format == "mp3":
+            return "audio/mpeg"
+        if audio_format == "wav":
+            return "audio/wav"
+        return "application/octet-stream"
 
     def _call_qwen(self, prompt: str) -> str:
         model = self._next_text_model

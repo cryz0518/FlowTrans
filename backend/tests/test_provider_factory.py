@@ -27,6 +27,7 @@ def test_provider_factory_returns_dashscope_provider() -> None:
         dashscope_api_key="test-key",
         dashscope_asr_endpoint="wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
         dashscope_realtime_text_model="qwen-turbo",
+        dashscope_tts_voice="longxiaochun_v2",
     )
 
     provider = create_provider(settings)
@@ -34,3 +35,4 @@ def test_provider_factory_returns_dashscope_provider() -> None:
     assert isinstance(provider, DashScopeProvider)
     assert provider.model_names()["asr_endpoint"] == "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
     assert provider.model_names()["realtime_text_model"] == "qwen-turbo"
+    assert provider.model_names()["tts_voice"] == "longxiaochun_v2"

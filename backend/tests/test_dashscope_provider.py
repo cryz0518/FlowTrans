@@ -9,9 +9,10 @@ from app.providers.dashscope_provider import (
 
 
 class FakeResponse:
-    def __init__(self, status_code: int, payload: dict) -> None:
+    def __init__(self, status_code: int, payload: dict, content: bytes = b"") -> None:
         self.status_code = status_code
         self._payload = payload
+        self.content = content
 
     def json(self) -> dict:
         return self._payload
@@ -68,6 +69,9 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
         realtime_text_model="qwen-turbo",
         text_model="qwen-plus",
         tts_model="CosyVoice-v3.5-flash",
+        tts_voice="longxiaochun_v2",
+        tts_format="mp3",
+        tts_sample_rate=24000,
     )
 
     assert provider.model_names() == {
@@ -76,6 +80,7 @@ def test_dashscope_provider_exposes_configured_model_names() -> None:
         "realtime_text_model": "qwen-turbo",
         "text_model": "qwen-plus",
         "tts_model": "CosyVoice-v3.5-flash",
+        "tts_voice": "longxiaochun_v2",
     }
 
 
@@ -246,6 +251,49 @@ async def test_dashscope_provider_uses_stable_model_for_final_transcript() -> No
     assert result is not None
     assert result.translated_text == "final translation"
     assert http_client.requests[0]["json"]["model"] == "qwen-plus"
+
+
+def test_dashscope_provider_synthesizes_speech_with_cosyvoice() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {}, content=b"audio-bytes"))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        tts_model="CosyVoice-v3.5-flash",
+        tts_voice="longxiaochun_v2",
+        tts_format="mp3",
+        tts_sample_rate=24000,
+        http_client=http_client,
+    )
+
+    result = provider.synthesize_speech("欢迎使用 FlowTrans。")
+
+    assert result.audio == b"audio-bytes"
+    assert result.mime_type == "audio/mpeg"
+    assert result.format == "mp3"
+    assert result.sample_rate == 24000
+    request = http_client.requests[0]
+    assert request["url"] == "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    assert request["headers"]["Authorization"] == "Bearer test-key"
+    assert request["json"] == {
+        "model": "CosyVoice-v3.5-flash",
+        "input": {
+            "text": "欢迎使用 FlowTrans。",
+            "voice": "longxiaochun_v2",
+        },
+        "parameters": {
+            "format": "mp3",
+            "sample_rate": 24000,
+        },
+    }
+
+
+def test_dashscope_provider_rejects_empty_tts_text() -> None:
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=FakeHttpClient(FakeResponse(200, {}, content=b"unused")),
+    )
+
+    with pytest.raises(ProviderRuntimeError, match="TTS text must not be empty"):
+        provider.synthesize_speech(" ")
 
 
 @pytest.mark.asyncio

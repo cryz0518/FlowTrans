@@ -11,6 +11,10 @@ def create_provider(settings: Settings) -> FakeProvider | DashScopeProvider:
             asr_model=settings.dashscope_asr_model,
             realtime_text_model=settings.dashscope_realtime_text_model,
             text_model=settings.dashscope_text_model,
+            tts_endpoint=settings.dashscope_tts_endpoint,
             tts_model=settings.dashscope_tts_model,
+            tts_voice=settings.dashscope_tts_voice,
+            tts_format=settings.dashscope_tts_format,
+            tts_sample_rate=settings.dashscope_tts_sample_rate,
         )
     return FakeProvider()
