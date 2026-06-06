@@ -30,3 +30,21 @@ conda activate your_name
 cd backend
 python -m uvicorn app.main:app --reload
 ```
+
+## Environment
+
+The local demo uses fake providers by default.
+
+```powershell
+$env:PROVIDER_MODE="fake"
+```
+
+To prepare real DashScope/Qwen integration:
+
+```powershell
+$env:PROVIDER_MODE="dashscope"
+$env:DASHSCOPE_API_KEY="<your-api-key>"
+$env:DASHSCOPE_ASR_MODEL="qwen3-asr-flash-realtime"
+$env:DASHSCOPE_TEXT_MODEL="qwen-plus"
+$env:DASHSCOPE_TTS_MODEL="CosyVoice-v3.5-flash"
+```
