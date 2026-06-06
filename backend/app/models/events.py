@@ -25,3 +25,16 @@ class AcceptedAudioChunk(BaseModel):
     session_id: str
     chunk_index: int
     byte_length: int
+
+
+SubtitleEventType = Literal["partial", "final", "revision"]
+
+
+class SubtitleEvent(BaseModel):
+    event_id: str
+    session_id: str
+    event_type: SubtitleEventType
+    source_text: str = ""
+    translated_text: str
+    replaces_event_id: str | None = None
+    reason: str | None = None
