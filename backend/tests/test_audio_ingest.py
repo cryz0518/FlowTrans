@@ -99,3 +99,20 @@ def test_audio_chunk_rejects_invalid_base64_payload() -> None:
 
     with pytest.raises(ValueError, match="payload_b64 must be valid base64"):
         service.accept_chunk(chunk)
+
+
+def test_audio_ingest_returns_decoded_payload_bytes() -> None:
+    store = SessionStore()
+    service = AudioIngestService(store)
+    chunk = AudioChunkIn(
+        session_id="session-a",
+        chunk_index=0,
+        captured_at_ms=100,
+        input_source="microphone",
+        mime_type="audio/webm",
+        payload_b64=base64.b64encode(b"abc").decode("ascii"),
+    )
+
+    accepted = service.accept_chunk(chunk)
+
+    assert accepted.payload == b"abc"

@@ -15,7 +15,12 @@ class FakeProvider:
         FakeProviderResult("The system can revise earlier mistakes.", "系统可以修正之前的错误。", True),
     ]
 
-    def transcribe_and_translate(self, chunk_index: int) -> FakeProviderResult:
+    def transcribe_and_translate(
+        self,
+        chunk_index: int,
+        audio: bytes | None = None,
+        mime_type: str | None = None,
+    ) -> FakeProviderResult:
         position = min(chunk_index, len(self._script) - 1)
         return self._script[position]
 

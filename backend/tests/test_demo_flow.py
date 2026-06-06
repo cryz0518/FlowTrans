@@ -42,7 +42,12 @@ def test_realtime_returns_provider_error_and_keeps_connection(monkeypatch) -> No
         def __init__(self) -> None:
             self.calls = 0
 
-        def transcribe_and_translate(self, chunk_index: int):
+        def transcribe_and_translate(
+            self,
+            chunk_index: int,
+            audio: bytes | None = None,
+            mime_type: str | None = None,
+        ):
             self.calls += 1
             if self.calls == 1:
                 raise ProviderRuntimeError("DashScope text model request failed")

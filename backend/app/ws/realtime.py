@@ -28,8 +28,8 @@ async def realtime(websocket: WebSocket) -> None:
             raw = await websocket.receive_json()
             try:
                 chunk = AudioChunkIn.model_validate(raw)
-                ingest.accept_chunk(chunk)
-                events = pipeline.process_chunk(chunk)
+                accepted = ingest.accept_chunk(chunk)
+                events = await pipeline.process_chunk(chunk, audio=accepted.payload)
             except (ValidationError, ValueError, ProviderRuntimeError) as exc:
                 await websocket.send_json({"type": "error", "message": str(exc)})
                 continue

@@ -28,4 +28,5 @@ class AudioIngestService:
             session_id=chunk.session_id,
             chunk_index=chunk.chunk_index,
             byte_length=len(payload),
+            payload=payload,
         )
