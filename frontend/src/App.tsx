@@ -7,12 +7,6 @@ import { useAudioCapture } from "./hooks/useAudioCapture";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import type { InputSource } from "./types/events";
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer();
-  const bytes = Array.from(new Uint8Array(buffer));
-  return btoa(String.fromCharCode(...bytes));
-}
-
 export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
   const [ttsEnabled, setTtsEnabled] = useState(false);
@@ -23,14 +17,14 @@ export function App() {
 
   const start = async () => {
     session.connect();
-    await capture.start(inputSource, async (blob) => {
+    await capture.start(inputSource, (audio) => {
       session.sendChunk({
         session_id: "browser-session",
         chunk_index: chunkIndexRef.current,
         captured_at_ms: Date.now(),
         input_source: inputSource,
-        mime_type: blob.type || "audio/webm",
-        payload_b64: await blobToBase64(blob),
+        mime_type: audio.mimeType,
+        payload_b64: audio.payloadB64,
       });
       chunkIndexRef.current += 1;
     });

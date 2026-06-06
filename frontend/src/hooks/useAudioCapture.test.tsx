@@ -3,35 +3,103 @@ import { describe, expect, it, vi } from "vitest";
 
 import { useAudioCapture } from "./useAudioCapture";
 
-describe("useAudioCapture", () => {
-  it("starts microphone capture and reports recording status", async () => {
-    const start = vi.fn();
-    const stop = vi.fn();
-    const trackStop = vi.fn();
+class FakeProcessor {
+  onaudioprocess: ((event: AudioProcessingEvent) => void) | null = null;
+  connect = vi.fn();
+  disconnect = vi.fn();
+}
 
-    vi.stubGlobal(
-      "MediaRecorder",
-      class {
-        ondataavailable: ((event: BlobEvent) => void) | null = null;
-        start = start;
-        stop = stop;
-        constructor() {}
-      },
-    );
-    vi.stubGlobal("navigator", {
-      mediaDevices: {
-        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: trackStop }] }),
-      },
+class FakeSource {
+  connect = vi.fn();
+  disconnect = vi.fn();
+}
+
+function installAudioMocks(sampleRate = 48000) {
+  const processor = new FakeProcessor();
+  const source = new FakeSource();
+  const close = vi.fn().mockResolvedValue(undefined);
+  const trackStop = vi.fn();
+
+  vi.stubGlobal(
+    "AudioContext",
+    class {
+      sampleRate = sampleRate;
+      createMediaStreamSource = vi.fn(() => source);
+      createScriptProcessor = vi.fn(() => processor);
+      destination = {};
+      close = close;
+    },
+  );
+  vi.stubGlobal("navigator", {
+    mediaDevices: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: trackStop }] }),
+      getDisplayMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: trackStop }] }),
+    },
+  });
+
+  return { close, processor, source, trackStop };
+}
+
+function makeAudioEvent(samples: Float32Array): AudioProcessingEvent {
+  return {
+    inputBuffer: {
+      numberOfChannels: 1,
+      getChannelData: () => samples,
+    },
+  } as unknown as AudioProcessingEvent;
+}
+
+describe("useAudioCapture", () => {
+  it("starts microphone pcm capture and reports recording status", async () => {
+    const { processor, source } = installAudioMocks();
+    const onChunk = vi.fn();
+    const { result } = renderHook(() => useAudioCapture());
+
+    await act(async () => {
+      await result.current.start("microphone", onChunk);
     });
 
+    expect(result.current.captureStatus).toBe("recording");
+    expect(source.connect).toHaveBeenCalledWith(processor);
+    expect(processor.connect).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("emits pcm chunks with pcm mime type", async () => {
+    const { processor } = installAudioMocks(16000);
+    const onChunk = vi.fn();
+    const { result } = renderHook(() => useAudioCapture());
+
+    await act(async () => {
+      await result.current.start("microphone", onChunk);
+    });
+
+    act(() => {
+      processor.onaudioprocess?.(makeAudioEvent(new Float32Array(8192).fill(0.25)));
+    });
+
+    expect(onChunk).toHaveBeenCalledWith({
+      mimeType: "audio/pcm;rate=16000;channels=1",
+      payloadB64: expect.any(String),
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("stops tracks and closes audio context", async () => {
+    const { close, trackStop } = installAudioMocks();
     const { result } = renderHook(() => useAudioCapture());
 
     await act(async () => {
       await result.current.start("microphone", vi.fn());
     });
 
-    expect(result.current.captureStatus).toBe("recording");
-    expect(start).toHaveBeenCalledWith(500);
+    act(() => {
+      result.current.stop();
+    });
+
+    expect(trackStop).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(result.current.captureStatus).toBe("idle");
     vi.unstubAllGlobals();
   });
 });
