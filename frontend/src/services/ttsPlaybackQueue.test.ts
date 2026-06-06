@@ -46,6 +46,7 @@ describe("TtsPlaybackQueue", () => {
   });
 
   it("continues playback after synthesis fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const synthesizeTts = vi
       .fn()
       .mockRejectedValueOnce(new Error("TTS failed"))
@@ -59,6 +60,8 @@ describe("TtsPlaybackQueue", () => {
 
     expect(synthesizeTts).toHaveBeenCalledTimes(2);
     expect(playAudio).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith("TTS playback skipped", expect.any(Error));
+    warnSpy.mockRestore();
   });
 
   it("clears pending subtitles", async () => {
