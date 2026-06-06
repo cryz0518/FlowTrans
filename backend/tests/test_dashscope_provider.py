@@ -13,6 +13,7 @@ class FakeResponse:
         self.status_code = status_code
         self._payload = payload
         self.content = content
+        self.text = str(payload)
 
     def json(self) -> dict:
         return self._payload
@@ -257,8 +258,8 @@ def test_dashscope_provider_synthesizes_speech_with_cosyvoice() -> None:
     http_client = FakeHttpClient(FakeResponse(200, {}, content=b"audio-bytes"))
     provider = DashScopeProvider(
         api_key="test-key",
-        tts_model="CosyVoice-v3.5-flash",
-        tts_voice="longxiaochun_v2",
+        tts_model="cosyvoice-v3-flash",
+        tts_voice="longanyang",
         tts_format="mp3",
         tts_sample_rate=24000,
         http_client=http_client,
@@ -271,19 +272,25 @@ def test_dashscope_provider_synthesizes_speech_with_cosyvoice() -> None:
     assert result.format == "mp3"
     assert result.sample_rate == 24000
     request = http_client.requests[0]
-    assert request["url"] == "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    assert request["url"] == "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
     assert request["headers"]["Authorization"] == "Bearer test-key"
     assert request["json"] == {
-        "model": "CosyVoice-v3.5-flash",
+        "model": "cosyvoice-v3-flash",
         "input": {
             "text": "欢迎使用 FlowTrans。",
-            "voice": "longxiaochun_v2",
-        },
-        "parameters": {
+            "voice": "longanyang",
             "format": "mp3",
             "sample_rate": 24000,
         },
     }
+
+
+def test_dashscope_provider_includes_tts_response_error_detail() -> None:
+    http_client = FakeHttpClient(FakeResponse(400, {"message": "voice not found"}))
+    provider = DashScopeProvider(api_key="test-key", http_client=http_client)
+
+    with pytest.raises(ProviderRuntimeError, match="voice not found"):
+        provider.synthesize_speech("欢迎使用 FlowTrans。")
 
 
 def test_dashscope_provider_rejects_empty_tts_text() -> None:

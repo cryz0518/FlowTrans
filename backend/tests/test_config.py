@@ -23,8 +23,8 @@ def test_settings_default_realtime_text_model_is_turbo() -> None:
 def test_settings_default_cosyvoice_tts_config() -> None:
     settings = Settings(_env_file=None)
 
-    assert settings.dashscope_tts_endpoint == "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-    assert settings.dashscope_tts_model == "CosyVoice-v3.5-flash"
-    assert settings.dashscope_tts_voice == "longxiaochun_v2"
+    assert settings.dashscope_tts_endpoint == "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+    assert settings.dashscope_tts_model == "cosyvoice-v3-flash"
+    assert settings.dashscope_tts_voice == "longanyang"
     assert settings.dashscope_tts_format == "mp3"
     assert settings.dashscope_tts_sample_rate == 24000

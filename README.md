@@ -34,10 +34,11 @@ npm run dev
 - fake provider 字幕演示链路
 - DashScope/Qwen 文本翻译与上下文纠错链路
 - DashScope `qwen3-asr-flash-realtime` 实时 ASR 链路
+- DashScope `cosyvoice-v3-flash` 中文语音合成链路
 
 当前 `PROVIDER_MODE="dashscope"` 时，后端会将浏览器音频 chunk 转发给 `qwen3-asr-flash-realtime`，再把英文转写交给 `qwen-plus` 翻译。前端仍使用浏览器默认录音格式；如果真实识别效果不稳定，后续 PR 会单独接入 PCM 采集。
 
-TTS（`CosyVoice-v3.5-flash`）仍保留为后续独立 PR 接入。
+TTS 默认使用 `cosyvoice-v3-flash` 与 `longanyang` 音色，可通过环境变量覆盖。
 
 ### 后端测试
 
@@ -67,7 +68,8 @@ $env:PROVIDER_MODE="dashscope"
 $env:DASHSCOPE_API_KEY="<your-api-key>"
 $env:DASHSCOPE_ASR_MODEL="qwen3-asr-flash-realtime"
 $env:DASHSCOPE_TEXT_MODEL="qwen-plus"
-$env:DASHSCOPE_TTS_MODEL="CosyVoice-v3.5-flash"
+$env:DASHSCOPE_TTS_MODEL="cosyvoice-v3-flash"
+$env:DASHSCOPE_TTS_VOICE="longanyang"
 ```
 
 如需离线演示，可切换到 fake provider：
