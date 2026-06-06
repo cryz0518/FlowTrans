@@ -1,8 +1,10 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
+from app.core.config import get_settings
 from app.models.events import AudioChunkIn
-from app.providers.fake_provider import FakeProvider
+from app.providers.dashscope_provider import MissingDashScopeApiKey, ProviderRuntimeError
+from app.providers.factory import create_provider
 from app.services.audio_ingest import AudioIngestService
 from app.services.session_store import SessionStore
 from app.services.subtitle_pipeline import SubtitlePipeline
@@ -15,7 +17,11 @@ async def realtime(websocket: WebSocket) -> None:
     await websocket.accept()
     store = SessionStore()
     ingest = AudioIngestService(store)
-    pipeline = SubtitlePipeline(FakeProvider())
+    try:
+        pipeline = SubtitlePipeline(create_provider(get_settings()))
+    except MissingDashScopeApiKey as exc:
+        await websocket.send_json({"type": "error", "message": str(exc)})
+        return
 
     try:
         while True:
@@ -24,7 +30,7 @@ async def realtime(websocket: WebSocket) -> None:
                 chunk = AudioChunkIn.model_validate(raw)
                 ingest.accept_chunk(chunk)
                 events = pipeline.process_chunk(chunk)
-            except (ValidationError, ValueError) as exc:
+            except (ValidationError, ValueError, ProviderRuntimeError) as exc:
                 await websocket.send_json({"type": "error", "message": str(exc)})
                 continue
 

@@ -1,9 +1,7 @@
 from app.models.events import AudioChunkIn, SubtitleEvent
-from app.providers.fake_provider import FakeProvider
-
 
 class SubtitlePipeline:
-    def __init__(self, provider: FakeProvider) -> None:
+    def __init__(self, provider) -> None:
         self._provider = provider
 
     def process_chunk(self, chunk: AudioChunkIn) -> list[SubtitleEvent]:
