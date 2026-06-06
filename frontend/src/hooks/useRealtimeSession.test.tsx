@@ -244,4 +244,40 @@ describe("useRealtimeSession", () => {
     expect(queue.clear).toHaveBeenCalledOnce();
     vi.unstubAllGlobals();
   });
+
+  it("uses the latest TTS enabled state for messages received after connect", () => {
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    const { result, rerender } = renderHook(({ ttsEnabled }) => useRealtimeSession("ws://test", { ttsEnabled }), {
+      initialProps: { ttsEnabled: false },
+    });
+
+    act(() => result.current.connect());
+    rerender({ ttsEnabled: true });
+    const socket = MockWebSocket.instances[0];
+    act(() => socket.onopen?.());
+    act(() =>
+      socket.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "subtitle_events",
+            events: [
+              {
+                event_id: "a-final",
+                session_id: "a",
+                event_type: "final",
+                source_text: "Welcome",
+                translated_text: "Welcome.",
+                replaces_event_id: null,
+                reason: null,
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    const queue = vi.mocked(TtsPlaybackQueue).mock.results[0].value;
+    expect(queue.enqueue).toHaveBeenCalledWith("a-final", "Welcome.");
+    vi.unstubAllGlobals();
+  });
 });

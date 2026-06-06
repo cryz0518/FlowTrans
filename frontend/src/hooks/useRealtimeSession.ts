@@ -19,6 +19,11 @@ export function useRealtimeSession(
   const [subtitles, setSubtitles] = useState<SubtitleEvent[]>([]);
   const clientRef = useRef<RealtimeClient | null>(null);
   const playbackQueueRef = useRef(new TtsPlaybackQueue());
+  const ttsEnabledRef = useRef(ttsEnabled);
+
+  useEffect(() => {
+    ttsEnabledRef.current = ttsEnabled;
+  }, [ttsEnabled]);
 
   useEffect(() => {
     if (!ttsEnabled) {
@@ -27,7 +32,7 @@ export function useRealtimeSession(
   }, [ttsEnabled]);
 
   const applyEvents = (events: SubtitleEvent[]) => {
-    if (ttsEnabled) {
+    if (ttsEnabledRef.current) {
       for (const event of events) {
         if (event.event_type === "final") {
           playbackQueueRef.current.enqueue(event.event_id, event.translated_text);
