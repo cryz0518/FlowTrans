@@ -52,7 +52,8 @@ export class TtsPlaybackQueue {
       try {
         const result = await this.synthesizeTts(item.text);
         await this.playAudio(result.audio);
-      } catch {
+      } catch (error) {
+        console.warn("TTS playback skipped", error);
         continue;
       }
     }
