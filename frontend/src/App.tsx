@@ -1,8 +1,12 @@
 import { ControlPanel } from "./components/ControlPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SubtitlePanel } from "./components/SubtitlePanel";
+import { useRealtimeSession } from "./hooks/useRealtimeSession";
 
 export function App() {
+  const session = useRealtimeSession();
+  const isConnected = session.connectionStatus === "connected";
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -11,10 +15,14 @@ export function App() {
           <p>AI 实时同声传译助手</p>
         </div>
       </header>
-      <StatusBar />
+      <StatusBar status={session.connectionStatus} />
       <div className="workbench">
-        <ControlPanel />
-        <SubtitlePanel />
+        <ControlPanel
+          isConnected={isConnected}
+          onStart={session.connect}
+          onStop={session.disconnect}
+        />
+        <SubtitlePanel subtitles={session.subtitles} />
       </div>
     </main>
   );

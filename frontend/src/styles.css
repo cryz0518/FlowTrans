@@ -114,6 +114,37 @@ button {
   color: #6b7280;
 }
 
+.subtitle-list {
+  display: grid;
+  gap: 12px;
+}
+
+.subtitle-item {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 12px;
+}
+
+.subtitle-item p {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+
+.subtitle-item small {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+}
+
+.subtitle-item.partial p {
+  color: #64748b;
+}
+
+.subtitle-item.final {
+  border-left-color: #2563eb;
+}
+
 @media (max-width: 760px) {
   .workbench {
     grid-template-columns: 1fr;
