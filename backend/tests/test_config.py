@@ -12,3 +12,9 @@ def test_settings_default_dashscope_asr_endpoint_is_mainland() -> None:
     settings = Settings(_env_file=None)
 
     assert settings.dashscope_asr_endpoint == "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+
+
+def test_settings_default_realtime_text_model_is_turbo() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.dashscope_realtime_text_model == "qwen-turbo"
