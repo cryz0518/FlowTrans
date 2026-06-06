@@ -1,20 +1,38 @@
 import { Mic, MonitorUp, Play, Square } from "lucide-react";
 
+import type { InputSource } from "../types/events";
+
 type Props = {
+  inputSource: InputSource;
   isConnected: boolean;
+  onSourceChange: (source: InputSource) => void;
   onStart: () => void;
   onStop: () => void;
 };
 
-export function ControlPanel({ isConnected, onStart, onStop }: Props) {
+export function ControlPanel({
+  inputSource,
+  isConnected,
+  onSourceChange,
+  onStart,
+  onStop,
+}: Props) {
   return (
     <section className="panel controls" aria-label="同传控制">
       <div className="source-row" aria-label="输入源">
-        <button type="button" className="source-button active">
+        <button
+          type="button"
+          className={`source-button ${inputSource === "microphone" ? "active" : ""}`}
+          onClick={() => onSourceChange("microphone")}
+        >
           <Mic size={18} />
           麦克风
         </button>
-        <button type="button" className="source-button">
+        <button
+          type="button"
+          className={`source-button ${inputSource === "system" ? "active" : ""}`}
+          onClick={() => onSourceChange("system")}
+        >
           <MonitorUp size={18} />
           系统音频
         </button>
