@@ -1,4 +1,4 @@
-import { Captions, Mic, MonitorUp, Play, Square, Volume2 } from "lucide-react";
+import { Captions, FileText, Mic, MonitorUp, Play, Square, Volume2 } from "lucide-react";
 
 import type { InputSource } from "../types/events";
 
@@ -11,6 +11,7 @@ type Props = {
   onSourceChange: (source: InputSource) => void;
   onTtsChange: (enabled: boolean) => void;
   onFloatingChange?: (enabled: boolean) => void;
+  onMeetingMinutesOpen: () => void;
   onStart: () => void;
   onStop: () => void;
 };
@@ -24,6 +25,7 @@ export function ControlPanel({
   onSourceChange,
   onTtsChange,
   onFloatingChange,
+  onMeetingMinutesOpen,
   onStart,
   onStop,
 }: Props) {
@@ -68,6 +70,10 @@ export function ControlPanel({
           />
         </label>
       ) : null}
+      <button type="button" className="source-button" onClick={onMeetingMinutesOpen}>
+        <FileText size={18} />
+        会议纪要
+      </button>
       <button type="button" className="primary-button" onClick={isConnected ? onStop : onStart}>
         {isConnected ? <Square size={18} /> : <Play size={18} />}
         {isConnected ? "停止" : "开始"}

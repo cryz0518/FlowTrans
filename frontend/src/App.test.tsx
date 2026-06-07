@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -46,7 +46,9 @@ function installAudioMocks() {
 
 describe("App", () => {
   afterEach(() => {
+    cleanup();
     delete window.flowtransDesktop;
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -54,7 +56,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "FlowTrans" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button")).toHaveLength(3);
+    expect(screen.getAllByRole("button")).toHaveLength(4);
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   });
 
@@ -119,5 +121,29 @@ describe("App", () => {
       commandListener?.({ type: "tts", enabled: true });
     });
     expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false, ttsEnabled: true });
+  });
+
+  it("opens the meeting minutes view from the left controls", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "会议纪要" }));
+
+    expect(screen.getByRole("heading", { name: "会议纪要" })).toBeInTheDocument();
+  });
+
+  it("asks to generate meeting minutes after stopping and switches to the minutes view", async () => {
+    installAudioMocks();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "开始" }));
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "停止" }));
+    });
+
+    expect(window.confirm).toHaveBeenCalledWith("是否要生成会议纪要？");
+    expect(screen.getByRole("heading", { name: "会议纪要" })).toBeInTheDocument();
   });
 });
