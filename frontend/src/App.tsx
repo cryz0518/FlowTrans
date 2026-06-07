@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ControlPanel } from "./components/ControlPanel";
 import { StatusBar } from "./components/StatusBar";
@@ -6,6 +6,7 @@ import { SubtitlePanel } from "./components/SubtitlePanel";
 import { useAudioCapture } from "./hooks/useAudioCapture";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import { shouldSendCapturedAudio } from "./services/audioSendGate";
+import { toFloatingSubtitleSnapshot } from "./services/floatingSubtitles";
 import "./types/desktop";
 import type { InputSource } from "./types/events";
 
@@ -29,6 +30,12 @@ export function App() {
       await window.flowtransDesktop?.closeFloatingWindow();
     }
   };
+
+  useEffect(() => {
+    if (desktopControlsAvailable) {
+      void window.flowtransDesktop?.sendFloatingSubtitles(toFloatingSubtitleSnapshot(session.subtitles));
+    }
+  }, [desktopControlsAvailable, session.subtitles]);
 
   const start = async () => {
     session.connect();

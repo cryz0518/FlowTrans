@@ -19,7 +19,12 @@ describe("App", () => {
   it("opens and closes the desktop floating subtitle window", () => {
     const openFloatingWindow = vi.fn(async () => undefined);
     const closeFloatingWindow = vi.fn(async () => undefined);
-    window.flowtransDesktop = { openFloatingWindow, closeFloatingWindow };
+    window.flowtransDesktop = {
+      openFloatingWindow,
+      closeFloatingWindow,
+      sendFloatingSubtitles: vi.fn(async () => undefined),
+      onFloatingSubtitles: vi.fn(() => () => undefined),
+    };
     render(<App />);
 
     const floatingToggle = screen.getByRole("checkbox", { name: "desktop-floating-translation" });

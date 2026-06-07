@@ -96,6 +96,11 @@ function configureFloatingWindowIpc() {
   ipcMain.handle("floating:close", () => {
     closeFloatingWindow();
   });
+  ipcMain.handle("floating:subtitles", (_event, snapshot) => {
+    if (floatingWindow && !floatingWindow.isDestroyed()) {
+      floatingWindow.webContents.send("floating:subtitles", snapshot);
+    }
+  });
 }
 
 function attachWindowDiagnostics(window) {

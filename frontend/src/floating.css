@@ -44,6 +44,28 @@ button {
   letter-spacing: 0;
 }
 
+.floating-actions {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.floating-mode {
+  height: 26px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.floating-mode.active {
+  border-color: #60a5fa;
+  color: #bfdbfe;
+}
+
 .floating-close {
   -webkit-app-region: no-drag;
   display: inline-flex;
@@ -66,9 +88,20 @@ button {
 .floating-content {
   display: grid;
   align-content: center;
-  gap: 10px;
   min-height: 0;
   padding: 16px 18px 20px;
+}
+
+.floating-empty {
+  align-self: center;
+  margin: 0;
+  color: #94a3b8;
+  font-size: 18px;
+}
+
+.floating-current-subtitle {
+  display: grid;
+  gap: 10px;
 }
 
 .floating-source,
@@ -76,6 +109,11 @@ button {
   margin: 0;
   overflow-wrap: anywhere;
   letter-spacing: 0;
+}
+
+.floating-source span,
+.floating-translation span {
+  display: block;
 }
 
 .floating-source {

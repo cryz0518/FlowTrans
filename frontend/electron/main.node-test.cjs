@@ -11,8 +11,12 @@ function loadMainWithElectronStub() {
       this.loadedUrl = null;
       this.handlers = new Map();
       this.webContents = {
+        sentMessages: [],
         openDevTools() {},
         on() {},
+        send(channel, payload) {
+          this.sentMessages.push({ channel, payload });
+        },
       };
       windows.push(this);
     }
@@ -104,4 +108,19 @@ test("configureFloatingWindowIpc registers open and close handlers", async () =>
 
   await ipcHandlers.get("floating:open")();
   await ipcHandlers.get("floating:close")();
+});
+
+test("configureFloatingWindowIpc forwards subtitles to the floating window", async () => {
+  const { main, ipcHandlers } = loadMainWithElectronStub();
+  const snapshot = {
+    current: { eventId: "event-1", displayKey: "event-1", sourceText: "Hello", translatedText: "你好" },
+  };
+
+  main.configureFloatingWindowIpc();
+  const floatingWindow = main.createFloatingWindow();
+  await ipcHandlers.get("floating:subtitles")({}, snapshot);
+
+  assert.deepEqual(floatingWindow.webContents.sentMessages, [
+    { channel: "floating:subtitles", payload: snapshot },
+  ]);
 });
