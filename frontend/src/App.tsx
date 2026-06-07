@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ControlPanel } from "./components/ControlPanel";
 import { StatusBar } from "./components/StatusBar";
@@ -14,11 +14,13 @@ export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [floatingEnabled, setFloatingEnabled] = useState(false);
+  const [runningRequested, setRunningRequested] = useState(false);
   const chunkIndexRef = useRef(0);
   const ttsPlaybackActiveRef = useRef(false);
   const session = useRealtimeSession("ws://127.0.0.1:8000/ws/realtime", { ttsEnabled });
   const capture = useAudioCapture();
   const isConnected = session.connectionStatus === "connected";
+  const isRunning = runningRequested || isConnected || capture.captureStatus === "recording";
   ttsPlaybackActiveRef.current = session.ttsPlaybackActive;
   const desktopControlsAvailable = window.flowtransDesktop !== undefined;
 
@@ -37,7 +39,20 @@ export function App() {
     }
   }, [desktopControlsAvailable, session.subtitles]);
 
-  const start = async () => {
+  useEffect(() => {
+    if (desktopControlsAvailable) {
+      void window.flowtransDesktop?.sendFloatingControlState({ isRunning });
+    }
+  }, [desktopControlsAvailable, isRunning]);
+
+  useEffect(() => {
+    if (capture.captureStatus === "error") {
+      setRunningRequested(false);
+    }
+  }, [capture.captureStatus]);
+
+  const start = useCallback(async () => {
+    setRunningRequested(true);
     session.connect();
     await capture.start(inputSource, (audio) => {
       if (!shouldSendCapturedAudio(inputSource, ttsPlaybackActiveRef.current)) {
@@ -54,13 +69,28 @@ export function App() {
       });
       chunkIndexRef.current += 1;
     });
-  };
+  }, [capture, inputSource, session]);
 
-  const stop = () => {
+  const stop = useCallback(() => {
+    setRunningRequested(false);
     capture.stop();
     session.disconnect();
     chunkIndexRef.current = 0;
-  };
+  }, [capture, session]);
+
+  useEffect(() => {
+    if (!desktopControlsAvailable) {
+      return undefined;
+    }
+
+    return window.flowtransDesktop?.onFloatingControlCommand((command) => {
+      if (command === "start") {
+        void start();
+      } else {
+        stop();
+      }
+    });
+  }, [desktopControlsAvailable, start, stop]);
 
   return (
     <main className="app-shell">
@@ -77,7 +107,7 @@ export function App() {
       <div className="workbench">
         <ControlPanel
           inputSource={inputSource}
-          isConnected={isConnected || capture.captureStatus === "recording"}
+          isConnected={isRunning}
           ttsEnabled={ttsEnabled}
           floatingEnabled={floatingEnabled}
           desktopControlsAvailable={desktopControlsAvailable}

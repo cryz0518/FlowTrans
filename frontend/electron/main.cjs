@@ -45,6 +45,7 @@ function createMainWindow() {
     closeFloatingWindow();
     mainWindow = null;
   });
+  return mainWindow;
 }
 
 function createFloatingWindow() {
@@ -99,6 +100,16 @@ function configureFloatingWindowIpc() {
   ipcMain.handle("floating:subtitles", (_event, snapshot) => {
     if (floatingWindow && !floatingWindow.isDestroyed()) {
       floatingWindow.webContents.send("floating:subtitles", snapshot);
+    }
+  });
+  ipcMain.handle("floating:control-state", (_event, state) => {
+    if (floatingWindow && !floatingWindow.isDestroyed()) {
+      floatingWindow.webContents.send("floating:control-state", state);
+    }
+  });
+  ipcMain.handle("floating:control-command", (_event, command) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("floating:control-command", command);
     }
   });
 }
@@ -164,6 +175,7 @@ module.exports = {
   closeFloatingWindow,
   configureMediaPermissions,
   configureFloatingWindowIpc,
+  createMainWindow,
   createFloatingWindow,
   floatingWindowUrl,
 };

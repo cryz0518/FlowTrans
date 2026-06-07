@@ -124,3 +124,23 @@ test("configureFloatingWindowIpc forwards subtitles to the floating window", asy
     { channel: "floating:subtitles", payload: snapshot },
   ]);
 });
+
+test("configureFloatingWindowIpc forwards control state and commands between windows", async () => {
+  const { main, windows, ipcHandlers } = loadMainWithElectronStub();
+  const state = { isRunning: true };
+
+  main.configureFloatingWindowIpc();
+  const mainWindow = main.createMainWindow();
+  const floatingWindow = main.createFloatingWindow();
+
+  await ipcHandlers.get("floating:control-state")({}, state);
+  await ipcHandlers.get("floating:control-command")({}, "stop");
+
+  assert.equal(windows[0], mainWindow);
+  assert.deepEqual(floatingWindow.webContents.sentMessages, [
+    { channel: "floating:control-state", payload: state },
+  ]);
+  assert.deepEqual(mainWindow.webContents.sentMessages, [
+    { channel: "floating:control-command", payload: "stop" },
+  ]);
+});

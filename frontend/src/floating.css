@@ -44,6 +44,32 @@ button {
   letter-spacing: 0;
 }
 
+.floating-title-group {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.floating-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  border: 1px solid rgba(96, 165, 250, 0.55);
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.2);
+  color: #dbeafe;
+  padding: 0 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.floating-run:hover {
+  background: rgba(37, 99, 235, 0.32);
+}
+
 .floating-actions {
   -webkit-app-region: no-drag;
   display: inline-flex;

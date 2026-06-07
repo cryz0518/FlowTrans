@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Play, Square, X } from "lucide-react";
 
 import { splitSubtitleLines, splitSubtitleSegments } from "../services/subtitleLineBreaks";
-import type { FloatingSubtitleSnapshot } from "../types/desktop";
+import type { FloatingControlState, FloatingSubtitleSnapshot } from "../types/desktop";
 
 type DisplayMode = "bilingual" | "translation";
 
@@ -11,6 +11,7 @@ type Props = {
 };
 
 const emptySnapshot: FloatingSubtitleSnapshot = { current: null };
+const idleControlState: FloatingControlState = { isRunning: false };
 const minSegmentDurationMs = 650;
 const maxSegmentDurationMs = 1200;
 
@@ -20,6 +21,7 @@ export function getFloatingSegmentDurationMs(segment: string) {
 
 export function FloatingSubtitleWindow({ initialSnapshot = emptySnapshot }: Props) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
+  const [controlState, setControlState] = useState(idleControlState);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("bilingual");
   const [segmentIndex, setSegmentIndex] = useState(0);
 
@@ -30,11 +32,21 @@ export function FloatingSubtitleWindow({ initialSnapshot = emptySnapshot }: Prop
   }, []);
 
   useEffect(() => {
+    return window.flowtransDesktop?.onFloatingControlState((nextState) => {
+      setControlState(nextState);
+    });
+  }, []);
+
+  useEffect(() => {
     setSegmentIndex(0);
   }, [snapshot.current?.displayKey]);
 
   const close = () => {
     void window.flowtransDesktop?.closeFloatingWindow();
+  };
+
+  const toggleRunning = () => {
+    void window.flowtransDesktop?.sendFloatingControlCommand(controlState.isRunning ? "stop" : "start");
   };
 
   const current = snapshot.current;
@@ -58,7 +70,13 @@ export function FloatingSubtitleWindow({ initialSnapshot = emptySnapshot }: Prop
   return (
     <main className="floating-shell" aria-label="桌面悬浮翻译">
       <header className="floating-toolbar">
-        <span className="floating-title">FlowTrans 悬浮翻译</span>
+        <div className="floating-title-group">
+          <span className="floating-title">FlowTrans 悬浮翻译</span>
+          <button type="button" className="floating-run" onClick={toggleRunning}>
+            {controlState.isRunning ? <Square size={14} /> : <Play size={14} />}
+            {controlState.isRunning ? "停止" : "开始"}
+          </button>
+        </div>
         <div className="floating-actions">
           <button
             type="button"

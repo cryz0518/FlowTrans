@@ -81,7 +81,11 @@ describe("FloatingSubtitleWindow", () => {
     window.flowtransDesktop = {
       openFloatingWindow: vi.fn(),
       closeFloatingWindow: vi.fn(),
+      sendFloatingControlState: vi.fn(),
       sendFloatingSubtitles: vi.fn(),
+      onFloatingControlState: vi.fn(() => () => undefined),
+      sendFloatingControlCommand: vi.fn(),
+      onFloatingControlCommand: vi.fn(() => () => undefined),
       onFloatingSubtitles: vi.fn((listener) => {
         subtitleListener = listener;
         return vi.fn();
@@ -115,6 +119,35 @@ describe("FloatingSubtitleWindow", () => {
 
     expect(screen.queryByText("今天非常高兴，我们一起去游乐园，")).not.toBeInTheDocument();
     expect(screen.getByText("吃了棒棒糖，冰淇淋，还坐了过山车。")).toBeInTheDocument();
+  });
+
+  it("shows the shared start state and sends start and stop commands", () => {
+    let stateListener: ((state: { isRunning: boolean }) => void) | undefined;
+    const sendFloatingControlCommand = vi.fn(async () => undefined);
+    window.flowtransDesktop = {
+      openFloatingWindow: vi.fn(),
+      closeFloatingWindow: vi.fn(),
+      sendFloatingControlState: vi.fn(),
+      sendFloatingSubtitles: vi.fn(),
+      onFloatingSubtitles: vi.fn(() => () => undefined),
+      sendFloatingControlCommand,
+      onFloatingControlCommand: vi.fn(() => () => undefined),
+      onFloatingControlState: vi.fn((listener) => {
+        stateListener = listener;
+        return vi.fn();
+      }),
+    };
+
+    render(<FloatingSubtitleWindow />);
+    fireEvent.click(screen.getByRole("button", { name: "开始" }));
+    expect(sendFloatingControlCommand).toHaveBeenLastCalledWith("start");
+
+    act(() => {
+      stateListener?.({ isRunning: true });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "停止" }));
+    expect(sendFloatingControlCommand).toHaveBeenLastCalledWith("stop");
   });
 });
 
