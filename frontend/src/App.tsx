@@ -44,7 +44,10 @@ export function App() {
           <p>AI 实时同声传译助手</p>
         </div>
       </header>
-      <StatusBar status={capture.captureStatus === "recording" ? "connected" : session.connectionStatus} />
+      <StatusBar
+        status={capture.captureStatus === "recording" ? "connected" : session.connectionStatus}
+        detail={capture.captureError ?? undefined}
+      />
       <div className="workbench">
         <ControlPanel
           inputSource={inputSource}

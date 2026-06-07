@@ -1,4 +1,4 @@
-const { BrowserWindow, app } = require("electron");
+const { BrowserWindow, app, desktopCapturer, session } = require("electron");
 const path = require("node:path");
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
@@ -27,7 +27,12 @@ function createMainWindow() {
   });
 
   attachWindowDiagnostics(mainWindow);
-  mainWindow.loadURL(appUrl());
+  const url = appUrl();
+  console.log(`[main] loading ${url}`);
+  mainWindow.loadURL(url);
+  if (process.env.ELECTRON_OPEN_DEVTOOLS === "1") {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -48,6 +53,7 @@ function attachWindowDiagnostics(window) {
 }
 
 app.whenReady().then(() => {
+  configureMediaPermissions();
   createMainWindow();
 
   app.on("activate", () => {
@@ -57,8 +63,37 @@ app.whenReady().then(() => {
   });
 });
 
+function configureMediaPermissions() {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "media" || permission === "display-capture");
+  });
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ["screen"] });
+      const screen = sources[0];
+      if (!screen) {
+        callback({});
+        return;
+      }
+
+      callback({
+        video: screen,
+        audio: process.platform === "win32" ? "loopback" : undefined,
+      });
+    } catch (error) {
+      console.error("[main] failed to resolve display media", error);
+      callback({});
+    }
+  });
+}
+
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
+
+module.exports = {
+  appUrl,
+  configureMediaPermissions,
+};

@@ -48,6 +48,11 @@ button {
   color: #39465d;
 }
 
+.status-detail {
+  color: #b91c1c;
+  font-size: 13px;
+}
+
 .status-dot {
   width: 10px;
   height: 10px;
