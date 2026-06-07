@@ -9,7 +9,7 @@ import websockets
 
 logger = logging.getLogger(__name__)
 TRANSCRIPT_RECEIVE_ATTEMPTS = 3
-TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS = 0.25
+TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS = 0.12
 
 
 class JsonWebSocket(Protocol):
@@ -88,7 +88,7 @@ class DashScopeAsrSession:
                         "turn_detection": {
                             "type": "server_vad",
                             "threshold": 0.0,
-                            "silence_duration_ms": 400,
+                            "silence_duration_ms": 250,
                         },
                     },
                 }

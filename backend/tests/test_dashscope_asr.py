@@ -91,7 +91,7 @@ async def test_asr_session_connects_with_model_and_api_key() -> None:
     assert websocket.sent[0]["session"]["turn_detection"] == {
         "type": "server_vad",
         "threshold": 0.0,
-        "silence_duration_ms": 400,
+        "silence_duration_ms": 250,
     }
 
 
@@ -234,7 +234,7 @@ async def test_asr_session_returns_none_when_no_transcript_event_arrives(monkeyp
     )
 
     async def immediate_wait_for(awaitable, timeout: float):
-        assert timeout == 0.25
+        assert timeout == 0.12
         return await awaitable
 
     monkeypatch.setattr(asyncio, "wait_for", immediate_wait_for)
@@ -269,7 +269,7 @@ async def test_asr_session_limits_low_latency_receive_attempts(monkeypatch) -> N
     transcript = await session.send_audio(b"abc", mime_type="audio/pcm;rate=16000;channels=1")
 
     assert transcript is None
-    assert timeouts == [0.25, 0.25, 0.25]
+    assert timeouts == [0.12, 0.12, 0.12]
 
 
 @pytest.mark.asyncio

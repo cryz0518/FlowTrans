@@ -27,7 +27,7 @@ def _subtitle_event_from_result(session_id: str, sequence: int, result) -> dict:
         "source_text": result.source_text,
         "translated_text": result.translated_text,
         "replaces_event_id": None,
-        "reason": None,
+        "reason": getattr(result, "reason", None),
     }
 
 

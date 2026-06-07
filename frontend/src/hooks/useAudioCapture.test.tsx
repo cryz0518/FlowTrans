@@ -85,7 +85,7 @@ describe("useAudioCapture", () => {
     vi.unstubAllGlobals();
   });
 
-  it("emits low latency pcm chunks every 250ms", async () => {
+  it("emits low latency pcm chunks every 160ms", async () => {
     const { processor } = installAudioMocks(16000);
     const onChunk = vi.fn();
     const { result } = renderHook(() => useAudioCapture());
@@ -95,7 +95,7 @@ describe("useAudioCapture", () => {
     });
 
     act(() => {
-      processor.onaudioprocess?.(makeAudioEvent(new Float32Array(4000).fill(0.25)));
+      processor.onaudioprocess?.(makeAudioEvent(new Float32Array(2560).fill(0.25)));
     });
 
     expect(onChunk).toHaveBeenCalledTimes(1);

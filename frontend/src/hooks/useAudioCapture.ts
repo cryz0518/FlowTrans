@@ -16,7 +16,7 @@ export type PcmAudioChunk = {
   payloadB64: string;
 };
 
-const CHUNK_DURATION_MS = 250;
+const CHUNK_DURATION_MS = 160;
 const SCRIPT_PROCESSOR_SIZE = 4096;
 
 export function useAudioCapture() {

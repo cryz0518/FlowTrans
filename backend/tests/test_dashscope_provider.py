@@ -138,7 +138,7 @@ async def test_dashscope_provider_translates_text_with_qwen_without_audio() -> N
     request = http_client.requests[0]
     assert request["headers"]["Authorization"] == "Bearer test-key"
     assert request["json"]["model"] == "qwen-plus"
-    assert "翻译成中文" in request["json"]["messages"][1]["content"]
+    assert "Only output the Chinese translation" in request["json"]["messages"][1]["content"]
 
 
 @pytest.mark.asyncio
@@ -146,7 +146,7 @@ async def test_dashscope_provider_uses_asr_transcript_for_translation() -> None:
     http_client = FakeHttpClient(
         FakeResponse(
             200,
-            {"output": {"text": "欢迎使用 FlowTrans。"}},
+            {"output": {"text": "partial translation"}},
         )
     )
     asr_session = FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=False))
@@ -165,8 +165,10 @@ async def test_dashscope_provider_uses_asr_transcript_for_translation() -> None:
     assert asr_session.sent == [{"audio": b"abc", "mime_type": "audio/webm"}]
     assert result is not None
     assert result.source_text == "Welcome to FlowTrans."
-    assert result.translated_text == "欢迎使用 FlowTrans。"
+    assert result.translated_text == "partial translation"
     assert result.is_final is False
+    assert result.reason is None
+    assert http_client.requests[0]["json"]["model"] == "qwen-turbo"
 
 
 @pytest.mark.asyncio
@@ -187,7 +189,7 @@ async def test_dashscope_provider_appends_audio_without_translation() -> None:
 
 @pytest.mark.asyncio
 async def test_dashscope_provider_receives_transcript_translation() -> None:
-    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "translated"}}))
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "partial translation"}}))
     provider = DashScopeProvider(
         api_key="test-key",
         realtime_text_model="qwen-turbo",
@@ -200,8 +202,9 @@ async def test_dashscope_provider_receives_transcript_translation() -> None:
 
     assert result is not None
     assert result.source_text == "Welcome to FlowTrans."
-    assert result.translated_text == "translated"
+    assert result.translated_text == "partial translation"
     assert result.is_final is False
+    assert result.reason is None
     assert http_client.requests[0]["json"]["model"] == "qwen-turbo"
 
 
@@ -220,6 +223,7 @@ async def test_dashscope_provider_receives_final_transcript_translation_with_sta
 
     assert result is not None
     assert result.is_final is True
+    assert result.reason == "根据完整语句修正翻译"
     assert http_client.requests[0]["json"]["model"] == "qwen-plus"
 
 
@@ -259,6 +263,7 @@ async def test_dashscope_provider_uses_realtime_model_for_partial_transcript() -
 
     assert result is not None
     assert result.translated_text == "partial translation"
+    assert result.reason is None
     assert http_client.requests[0]["json"]["model"] == "qwen-turbo"
 
 
@@ -281,6 +286,7 @@ async def test_dashscope_provider_uses_stable_model_for_final_transcript() -> No
 
     assert result is not None
     assert result.translated_text == "final translation"
+    assert result.reason == "根据完整语句修正翻译"
     assert http_client.requests[0]["json"]["model"] == "qwen-plus"
 
 
