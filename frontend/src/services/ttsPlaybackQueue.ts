@@ -4,6 +4,7 @@ import type { TtsAudioResult } from "./ttsClient";
 type TtsPlaybackQueueItem = {
   eventId: string;
   text: string;
+  audio: Promise<TtsAudioResult>;
 };
 
 type TtsPlaybackQueueOptions = {
@@ -29,7 +30,7 @@ export class TtsPlaybackQueue {
     }
 
     this.queuedEventIds.add(eventId);
-    this.queue.push({ eventId, text });
+    this.queue.push({ eventId, text, audio: this.synthesizeTts(text) });
     this.processing ??= this.processQueue();
   }
 
@@ -50,7 +51,7 @@ export class TtsPlaybackQueue {
       }
 
       try {
-        const result = await this.synthesizeTts(item.text);
+        const result = await item.audio;
         await this.playAudio(result.audio);
       } catch (error) {
         console.warn("TTS playback skipped", error);
