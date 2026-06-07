@@ -10,6 +10,13 @@ import { shouldSendCapturedAudio } from "./services/audioSendGate";
 import { toFloatingSubtitleSnapshot } from "./services/floatingSubtitles";
 import { downloadMeetingMinutes } from "./services/meetingMinutes";
 import { generateMeetingMinutes as generateMeetingMinutesWithAi } from "./services/meetingMinutesClient";
+import {
+  createMeetingMinutesHistoryRecord,
+  deleteMeetingMinutesHistoryRecord,
+  loadMeetingMinutesHistory,
+  saveMeetingMinutesHistoryRecord,
+  type MeetingMinutesHistoryRecord,
+} from "./services/meetingMinutesHistory";
 import "./types/desktop";
 import type { InputSource } from "./types/events";
 
@@ -25,6 +32,12 @@ export function App() {
   const [meetingMinutesStatus, setMeetingMinutesStatus] = useState<MeetingMinutesStatus>("idle");
   const [meetingMinutesProgress, setMeetingMinutesProgress] = useState(0);
   const [meetingMinutesContent, setMeetingMinutesContent] = useState("");
+  const [meetingMinutesHistory, setMeetingMinutesHistory] = useState<MeetingMinutesHistoryRecord[]>(() =>
+    loadMeetingMinutesHistory(),
+  );
+  const [selectedMeetingMinutesHistoryId, setSelectedMeetingMinutesHistoryId] = useState<string | null>(
+    () => loadMeetingMinutesHistory()[0]?.id ?? null,
+  );
   const chunkIndexRef = useRef(0);
   const ttsPlaybackActiveRef = useRef(false);
   const session = useRealtimeSession("ws://127.0.0.1:8000/ws/realtime", { ttsEnabled });
@@ -85,10 +98,18 @@ export function App() {
     setActiveView("minutes");
     setMeetingMinutesStatus("generating");
     setMeetingMinutesProgress(35);
+    setSelectedMeetingMinutesHistoryId(null);
 
     window.setTimeout(async () => {
       try {
         const markdown = await generateMeetingMinutesWithAi(session.subtitles);
+        const record = createMeetingMinutesHistoryRecord({
+          markdown,
+          subtitles: session.subtitles,
+        });
+        const nextHistory = saveMeetingMinutesHistoryRecord(record);
+        setMeetingMinutesHistory(nextHistory);
+        setSelectedMeetingMinutesHistoryId(record.id);
         setMeetingMinutesContent(markdown);
       } catch (error) {
         setMeetingMinutesContent(
@@ -109,6 +130,37 @@ export function App() {
       downloadMeetingMinutes(meetingMinutesContent);
     }
   }, [meetingMinutesContent]);
+
+  const selectMeetingMinutesHistory = useCallback(
+    (id: string) => {
+      const record = meetingMinutesHistory.find((item) => item.id === id);
+      if (!record) {
+        return;
+      }
+
+      setSelectedMeetingMinutesHistoryId(id);
+      setMeetingMinutesContent(record.minutesMarkdown);
+      setMeetingMinutesProgress(100);
+      setMeetingMinutesStatus("ready");
+    },
+    [meetingMinutesHistory],
+  );
+
+  const deleteMeetingMinutesHistory = useCallback(
+    (id: string) => {
+      const nextHistory = deleteMeetingMinutesHistoryRecord(id);
+      setMeetingMinutesHistory(nextHistory);
+
+      if (selectedMeetingMinutesHistoryId === id) {
+        const nextRecord = nextHistory[0] ?? null;
+        setSelectedMeetingMinutesHistoryId(nextRecord?.id ?? null);
+        setMeetingMinutesContent(nextRecord?.minutesMarkdown ?? "");
+        setMeetingMinutesStatus(nextRecord ? "ready" : "idle");
+        setMeetingMinutesProgress(nextRecord ? 100 : 0);
+      }
+    },
+    [selectedMeetingMinutesHistoryId],
+  );
 
   const stop = useCallback((options: { askMeetingMinutes?: boolean } = {}) => {
     setRunningRequested(false);
@@ -169,8 +221,12 @@ export function App() {
             status={meetingMinutesStatus}
             progress={meetingMinutesProgress}
             content={meetingMinutesContent}
+            historyRecords={meetingMinutesHistory}
+            selectedHistoryId={selectedMeetingMinutesHistoryId}
             onGenerate={generateMeetingMinutes}
             onSave={saveMeetingMinutes}
+            onHistorySelect={selectMeetingMinutesHistory}
+            onHistoryDelete={deleteMeetingMinutesHistory}
           />
         ) : (
           <SubtitlePanel subtitles={session.subtitles} />

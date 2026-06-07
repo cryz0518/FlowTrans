@@ -52,6 +52,8 @@ function installAudioMocks() {
 describe("App", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
+    localStorage.clear();
     delete window.flowtransDesktop;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -180,6 +182,34 @@ describe("App", () => {
 
     expect(generateMeetingMinutes).toHaveBeenCalled();
     expect(screen.getByText(/已生成/)).toBeInTheDocument();
-    vi.useRealTimers();
+    expect(screen.getByRole("complementary", { name: "历史会议纪要" })).toHaveTextContent("会议纪要");
+  });
+
+  it("loads local meeting minutes history with bilingual transcript pairs", () => {
+    localStorage.setItem(
+      "flowtrans.meetingMinutesHistory.v1",
+      JSON.stringify([
+        {
+          id: "history-1",
+          title: "发布计划",
+          createdAt: "2026-06-07T09:00:00.000Z",
+          minutesMarkdown: "# 会议纪要\n\n## 会议主题\n发布计划",
+          subtitles: [
+            {
+              eventId: "event-1",
+              sourceText: "We confirmed the next plan.",
+              translatedText: "我们确认了下一步计划。",
+            },
+          ],
+        },
+      ]),
+    );
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "会议纪要" }));
+
+    expect(screen.getByRole("button", { name: /^发布计划/ })).toBeInTheDocument();
+    expect(screen.getByText("We confirmed the next plan.")).toBeInTheDocument();
+    expect(screen.getByText("我们确认了下一步计划。")).toBeInTheDocument();
   });
 });
