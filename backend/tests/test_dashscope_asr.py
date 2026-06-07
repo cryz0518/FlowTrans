@@ -220,6 +220,30 @@ async def test_asr_session_receives_transcript_separately() -> None:
 
 
 @pytest.mark.asyncio
+async def test_asr_session_returns_none_when_receive_runs_after_close() -> None:
+    websocket = FakeAsrWebSocket(
+        messages=[
+            {
+                "type": "conversation.item.input_audio_transcription.text",
+                "text": "Welcome",
+                "stash": "",
+            },
+        ]
+    )
+    session = DashScopeAsrSession(
+        api_key="test-key",
+        model="qwen3-asr-flash-realtime",
+        connect=FakeConnector(websocket),
+    )
+    await session.connect()
+    await session.close()
+
+    transcript = await session.receive_transcript()
+
+    assert transcript is None
+
+
+@pytest.mark.asyncio
 async def test_asr_session_returns_none_when_no_transcript_event_arrives(monkeypatch) -> None:
     websocket = FakeAsrWebSocket(
         messages=[
