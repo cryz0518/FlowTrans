@@ -41,9 +41,9 @@ export function App() {
 
   useEffect(() => {
     if (desktopControlsAvailable) {
-      void window.flowtransDesktop?.sendFloatingControlState({ isRunning });
+      void window.flowtransDesktop?.sendFloatingControlState({ isRunning, ttsEnabled });
     }
-  }, [desktopControlsAvailable, isRunning]);
+  }, [desktopControlsAvailable, isRunning, ttsEnabled]);
 
   useEffect(() => {
     if (capture.captureStatus === "error") {
@@ -86,8 +86,10 @@ export function App() {
     return window.flowtransDesktop?.onFloatingControlCommand((command) => {
       if (command === "start") {
         void start();
-      } else {
+      } else if (command === "stop") {
         stop();
+      } else if (command.type === "tts") {
+        setTtsEnabled(command.enabled);
       }
     });
   }, [desktopControlsAvailable, start, stop]);

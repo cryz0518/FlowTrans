@@ -127,7 +127,7 @@ test("configureFloatingWindowIpc forwards subtitles to the floating window", asy
 
 test("configureFloatingWindowIpc forwards control state and commands between windows", async () => {
   const { main, windows, ipcHandlers } = loadMainWithElectronStub();
-  const state = { isRunning: true };
+  const state = { isRunning: true, ttsEnabled: true };
 
   main.configureFloatingWindowIpc();
   const mainWindow = main.createMainWindow();

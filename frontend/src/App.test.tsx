@@ -89,15 +89,35 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false });
+    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false, ttsEnabled: false });
     await act(async () => {
       commandListener?.("start");
     });
-    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: true });
+    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: true, ttsEnabled: false });
 
     act(() => {
       commandListener?.("stop");
     });
-    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false });
+    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false, ttsEnabled: false });
+  });
+
+  it("syncs Chinese voice state and handles floating window voice commands", () => {
+    let commandListener: ((command: "start" | "stop" | { type: "tts"; enabled: boolean }) => void) | undefined;
+    const sendFloatingControlState = vi.fn(async () => undefined);
+    window.flowtransDesktop = createDesktopApiMock({
+      sendFloatingControlState,
+      onFloatingControlCommand: vi.fn((listener) => {
+        commandListener = listener;
+        return vi.fn();
+      }),
+    });
+
+    render(<App />);
+
+    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false, ttsEnabled: false });
+    act(() => {
+      commandListener?.({ type: "tts", enabled: true });
+    });
+    expect(sendFloatingControlState).toHaveBeenLastCalledWith({ isRunning: false, ttsEnabled: true });
   });
 });

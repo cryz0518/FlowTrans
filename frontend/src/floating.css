@@ -30,12 +30,18 @@ button {
 
 .floating-toolbar {
   -webkit-app-region: drag;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  gap: 6px;
   min-height: 36px;
   padding: 6px 8px 6px 12px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.floating-toolbar-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .floating-title {
@@ -75,6 +81,42 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.floating-settings {
+  -webkit-app-region: no-drag;
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.floating-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.floating-settings input[type="range"] {
+  width: 72px;
+  accent-color: #60a5fa;
+}
+
+.floating-settings input[type="color"] {
+  width: 24px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0;
+}
+
+.floating-voice-toggle input {
+  accent-color: #60a5fa;
 }
 
 .floating-mode {
@@ -149,7 +191,6 @@ button {
 }
 
 .floating-translation {
-  color: #ffffff;
   font-size: 22px;
   font-weight: 700;
   line-height: 1.35;

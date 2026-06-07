@@ -122,7 +122,7 @@ describe("FloatingSubtitleWindow", () => {
   });
 
   it("shows the shared start state and sends start and stop commands", () => {
-    let stateListener: ((state: { isRunning: boolean }) => void) | undefined;
+    let stateListener: ((state: { isRunning: boolean; ttsEnabled: boolean }) => void) | undefined;
     const sendFloatingControlCommand = vi.fn(async () => undefined);
     window.flowtransDesktop = {
       openFloatingWindow: vi.fn(),
@@ -143,11 +143,55 @@ describe("FloatingSubtitleWindow", () => {
     expect(sendFloatingControlCommand).toHaveBeenLastCalledWith("start");
 
     act(() => {
-      stateListener?.({ isRunning: true });
+      stateListener?.({ isRunning: true, ttsEnabled: false });
     });
 
     fireEvent.click(screen.getByRole("button", { name: "停止" }));
     expect(sendFloatingControlCommand).toHaveBeenLastCalledWith("stop");
+  });
+
+  it("customizes font size color and window opacity", () => {
+    const snapshot: FloatingSubtitleSnapshot = {
+      current: { eventId: "event-1", displayKey: "event-1", sourceText: "Hello", translatedText: "你好" },
+    };
+
+    render(<FloatingSubtitleWindow initialSnapshot={snapshot} />);
+
+    fireEvent.change(screen.getByLabelText("字号"), { target: { value: "30" } });
+    fireEvent.change(screen.getByLabelText("文字颜色"), { target: { value: "#22c55e" } });
+    fireEvent.change(screen.getByLabelText("透明度"), { target: { value: "70" } });
+
+    expect(screen.getByLabelText("桌面悬浮翻译")).toHaveStyle({ opacity: "0.7" });
+    expect(screen.getByText("你好").parentElement).toHaveStyle({ color: "#22c55e", fontSize: "30px" });
+  });
+
+  it("syncs Chinese voice state and sends voice toggle commands", () => {
+    let stateListener: ((state: { isRunning: boolean; ttsEnabled: boolean }) => void) | undefined;
+    const sendFloatingControlCommand = vi.fn(async () => undefined);
+    window.flowtransDesktop = {
+      openFloatingWindow: vi.fn(),
+      closeFloatingWindow: vi.fn(),
+      sendFloatingControlState: vi.fn(),
+      sendFloatingSubtitles: vi.fn(),
+      onFloatingSubtitles: vi.fn(() => () => undefined),
+      sendFloatingControlCommand,
+      onFloatingControlCommand: vi.fn(() => () => undefined),
+      onFloatingControlState: vi.fn((listener) => {
+        stateListener = listener;
+        return vi.fn();
+      }),
+    };
+
+    render(<FloatingSubtitleWindow />);
+    act(() => {
+      stateListener?.({ isRunning: false, ttsEnabled: true });
+    });
+
+    const voiceToggle = screen.getByRole("checkbox", { name: "中文播报" });
+    expect(voiceToggle).toBeChecked();
+
+    fireEvent.click(voiceToggle);
+    expect(sendFloatingControlCommand).toHaveBeenLastCalledWith({ type: "tts", enabled: false });
   });
 });
 

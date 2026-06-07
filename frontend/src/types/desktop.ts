@@ -11,9 +11,10 @@ export type FloatingSubtitleSnapshot = {
 
 export type FloatingControlState = {
   isRunning: boolean;
+  ttsEnabled: boolean;
 };
 
-export type FloatingControlCommand = "start" | "stop";
+export type FloatingControlCommand = "start" | "stop" | { type: "tts"; enabled: boolean };
 
 export type FlowTransDesktopApi = {
   openFloatingWindow: () => Promise<void>;
