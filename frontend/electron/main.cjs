@@ -1,16 +1,24 @@
-const { BrowserWindow, app, desktopCapturer, session } = require("electron");
+const { BrowserWindow, app, desktopCapturer, ipcMain, session } = require("electron");
 const path = require("node:path");
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
 
 let mainWindow = null;
+let floatingWindow = null;
 
 function appUrl() {
   if (isDev) {
     return devServerUrl;
   }
   return new URL(`file://${path.join(__dirname, "../dist/index.html")}`).toString();
+}
+
+function floatingWindowUrl() {
+  if (isDev) {
+    return new URL("/floating.html", devServerUrl).toString();
+  }
+  return new URL(`file://${path.join(__dirname, "../dist/floating.html")}`).toString();
 }
 
 function createMainWindow() {
@@ -34,7 +42,59 @@ function createMainWindow() {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
   mainWindow.on("closed", () => {
+    closeFloatingWindow();
     mainWindow = null;
+  });
+}
+
+function createFloatingWindow() {
+  if (floatingWindow && !floatingWindow.isDestroyed()) {
+    floatingWindow.show();
+    return floatingWindow;
+  }
+
+  floatingWindow = new BrowserWindow({
+    width: 720,
+    height: 220,
+    minWidth: 360,
+    minHeight: 120,
+    frame: false,
+    resizable: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    transparent: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  floatingWindow.setAlwaysOnTop(true, "screen-saver");
+  attachWindowDiagnostics(floatingWindow);
+  const url = floatingWindowUrl();
+  console.log(`[main] loading floating ${url}`);
+  floatingWindow.loadURL(url);
+  floatingWindow.on("closed", () => {
+    floatingWindow = null;
+  });
+  return floatingWindow;
+}
+
+function closeFloatingWindow() {
+  if (floatingWindow && !floatingWindow.isDestroyed()) {
+    floatingWindow.close();
+  }
+  floatingWindow = null;
+}
+
+function configureFloatingWindowIpc() {
+  ipcMain.handle("floating:open", () => {
+    createFloatingWindow();
+  });
+  ipcMain.handle("floating:close", () => {
+    closeFloatingWindow();
   });
 }
 
@@ -54,6 +114,7 @@ function attachWindowDiagnostics(window) {
 
 app.whenReady().then(() => {
   configureMediaPermissions();
+  configureFloatingWindowIpc();
   createMainWindow();
 
   app.on("activate", () => {
@@ -95,5 +156,9 @@ app.on("window-all-closed", () => {
 
 module.exports = {
   appUrl,
+  closeFloatingWindow,
   configureMediaPermissions,
+  configureFloatingWindowIpc,
+  createFloatingWindow,
+  floatingWindowUrl,
 };

@@ -6,17 +6,29 @@ import { SubtitlePanel } from "./components/SubtitlePanel";
 import { useAudioCapture } from "./hooks/useAudioCapture";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import { shouldSendCapturedAudio } from "./services/audioSendGate";
+import "./types/desktop";
 import type { InputSource } from "./types/events";
 
 export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
   const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [floatingEnabled, setFloatingEnabled] = useState(false);
   const chunkIndexRef = useRef(0);
   const ttsPlaybackActiveRef = useRef(false);
   const session = useRealtimeSession("ws://127.0.0.1:8000/ws/realtime", { ttsEnabled });
   const capture = useAudioCapture();
   const isConnected = session.connectionStatus === "connected";
   ttsPlaybackActiveRef.current = session.ttsPlaybackActive;
+  const desktopControlsAvailable = window.flowtransDesktop !== undefined;
+
+  const setFloatingWindowEnabled = async (enabled: boolean) => {
+    setFloatingEnabled(enabled);
+    if (enabled) {
+      await window.flowtransDesktop?.openFloatingWindow();
+    } else {
+      await window.flowtransDesktop?.closeFloatingWindow();
+    }
+  };
 
   const start = async () => {
     session.connect();
@@ -60,8 +72,11 @@ export function App() {
           inputSource={inputSource}
           isConnected={isConnected || capture.captureStatus === "recording"}
           ttsEnabled={ttsEnabled}
+          floatingEnabled={floatingEnabled}
+          desktopControlsAvailable={desktopControlsAvailable}
           onSourceChange={setInputSource}
           onTtsChange={setTtsEnabled}
+          onFloatingChange={setFloatingWindowEnabled}
           onStart={start}
           onStop={stop}
         />
