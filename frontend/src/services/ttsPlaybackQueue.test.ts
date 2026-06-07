@@ -64,6 +64,36 @@ describe("TtsPlaybackQueue", () => {
     warnSpy.mockRestore();
   });
 
+  it("preloads the next subtitle while the current audio is playing", async () => {
+    const playbackControl: { release: (() => void) | null } = { release: null };
+    const synthesizeTts = vi.fn(async (text: string) => makeAudioResult(text));
+    const playAudio = vi.fn(
+      () => {
+        if (playAudio.mock.calls.length > 1) {
+          return Promise.resolve();
+        }
+        return new Promise<void>((resolve) => {
+          playbackControl.release = resolve;
+        });
+      },
+    );
+    const queue = new TtsPlaybackQueue({ synthesizeTts, playAudio });
+
+    queue.enqueue("event-1", "first subtitle");
+    queue.enqueue("event-2", "second subtitle");
+    await vi.waitFor(() => expect(playAudio).toHaveBeenCalledOnce());
+
+    expect(synthesizeTts).toHaveBeenCalledTimes(2);
+    expect(synthesizeTts).toHaveBeenNthCalledWith(2, "second subtitle");
+
+    const release = playbackControl.release;
+    if (release === null) {
+      throw new Error("Playback did not start");
+    }
+    release();
+    await queue.drainForTest();
+  });
+
   it("clears pending subtitles", async () => {
     const playbackControl: { release: (() => void) | null } = { release: null };
     const synthesizeTts = vi.fn(async (text: string) => makeAudioResult(text));
@@ -86,6 +116,7 @@ describe("TtsPlaybackQueue", () => {
     release();
     await queue.drainForTest();
 
-    expect(synthesizeTts).toHaveBeenCalledTimes(1);
+    expect(synthesizeTts).toHaveBeenCalledTimes(2);
+    expect(playAudio).toHaveBeenCalledOnce();
   });
 });
