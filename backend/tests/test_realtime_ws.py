@@ -71,6 +71,7 @@ def test_realtime_acknowledges_audio_before_background_subtitle(monkeypatch) -> 
                         "source_text": "Welcome",
                         "translated_text": "欢迎",
                         "is_final": False,
+                        "reason": None,
                     },
                 )()
             return None
@@ -94,6 +95,45 @@ def test_realtime_acknowledges_audio_before_background_subtitle(monkeypatch) -> 
     assert provider.appended == [{"audio": b"abc", "mime_type": "audio/webm"}]
     assert subtitles["type"] == "subtitle_events"
     assert subtitles["events"][0]["translated_text"] == "欢迎"
+
+
+def test_realtime_stream_includes_final_correction_reason(monkeypatch) -> None:
+    class StreamingProvider:
+        def __init__(self) -> None:
+            self.appended: list[dict] = []
+            self.receive_calls = 0
+
+        async def append_audio(self, audio: bytes, mime_type: str) -> None:
+            self.appended.append({"audio": audio, "mime_type": mime_type})
+
+        async def receive_transcript_translation(self):
+            self.receive_calls += 1
+            if self.receive_calls == 1:
+                return type(
+                    "ProviderResult",
+                    (),
+                    {
+                        "source_text": "Welcome to FlowTrans.",
+                        "translated_text": "欢迎使用 FlowTrans。",
+                        "is_final": True,
+                        "reason": "根据完整语句修正翻译",
+                    },
+                )()
+            return None
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.ws.realtime.create_provider", lambda settings: StreamingProvider())
+    client = TestClient(create_app())
+
+    with client.websocket_connect("/ws/realtime") as websocket:
+        websocket.send_json(make_payload())
+        websocket.receive_json()
+        subtitles = websocket.receive_json()
+
+    assert subtitles["events"][0]["event_type"] == "final"
+    assert subtitles["events"][0]["reason"] == "根据完整语句修正翻译"
 
 
 def test_realtime_returns_asr_error_and_keeps_connection(monkeypatch) -> None:

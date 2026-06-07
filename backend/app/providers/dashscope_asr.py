@@ -9,7 +9,7 @@ import websockets
 
 logger = logging.getLogger(__name__)
 TRANSCRIPT_RECEIVE_ATTEMPTS = 3
-TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS = 0.25
+TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS = 0.12
 
 
 class JsonWebSocket(Protocol):
@@ -88,7 +88,7 @@ class DashScopeAsrSession:
                         "turn_detection": {
                             "type": "server_vad",
                             "threshold": 0.0,
-                            "silence_duration_ms": 400,
+                            "silence_duration_ms": 250,
                         },
                     },
                 }
@@ -120,11 +120,14 @@ class DashScopeAsrSession:
                 raise DashScopeAsrSessionError("ASR realtime connection lost while sending audio") from retry_exc
 
     async def receive_transcript(self) -> AsrTranscript | None:
-        assert self._websocket is not None
+        websocket = self._websocket
+        if websocket is None:
+            logger.info("ASR receive skipped because connection is closed")
+            return None
         for _ in range(TRANSCRIPT_RECEIVE_ATTEMPTS):
             try:
                 event = await asyncio.wait_for(
-                    self._websocket.receive_json(),
+                    websocket.receive_json(),
                     timeout=TRANSCRIPT_RECEIVE_TIMEOUT_SECONDS,
                 )
             except TimeoutError:
