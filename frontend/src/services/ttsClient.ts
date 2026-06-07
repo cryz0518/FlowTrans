@@ -41,8 +41,15 @@ export async function synthesizeTts(
 }
 
 function buildTtsEndpoint(apiBaseUrl?: string): string {
-  const baseUrl = apiBaseUrl?.replace(/\/$/, "") ?? "";
+  const baseUrl = (apiBaseUrl ?? defaultApiBaseUrl()).replace(/\/$/, "");
   return `${baseUrl}/api/tts/synthesize`;
+}
+
+function defaultApiBaseUrl(): string {
+  if (globalThis.location?.protocol === "file:") {
+    return "http://127.0.0.1:8000";
+  }
+  return "";
 }
 
 function parseSampleRate(value: string | null): number | null {

@@ -94,6 +94,35 @@ describe("TtsPlaybackQueue", () => {
     await queue.drainForTest();
   });
 
+  it("reports playback activity while audio is playing", async () => {
+    const playbackControl: { release: (() => void) | null } = { release: null };
+    const onPlaybackActiveChange = vi.fn();
+    const playAudio = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          playbackControl.release = resolve;
+        }),
+    );
+    const queue = new TtsPlaybackQueue({
+      synthesizeTts: vi.fn(async (text: string) => makeAudioResult(text)),
+      playAudio,
+      onPlaybackActiveChange,
+    });
+
+    queue.enqueue("event-1", "first subtitle");
+    await vi.waitFor(() => expect(onPlaybackActiveChange).toHaveBeenCalledWith(true));
+    await vi.waitFor(() => expect(playAudio).toHaveBeenCalledOnce());
+
+    const release = playbackControl.release;
+    if (release === null) {
+      throw new Error("Playback did not start");
+    }
+    release();
+    await queue.drainForTest();
+
+    expect(onPlaybackActiveChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("clears pending subtitles", async () => {
     const playbackControl: { release: (() => void) | null } = { release: null };
     const synthesizeTts = vi.fn(async (text: string) => makeAudioResult(text));

@@ -17,8 +17,9 @@ export function useRealtimeSession(
   const { ttsEnabled = false } = options;
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [subtitles, setSubtitles] = useState<SubtitleEvent[]>([]);
+  const [ttsPlaybackActive, setTtsPlaybackActive] = useState(false);
   const clientRef = useRef<RealtimeClient | null>(null);
-  const playbackQueueRef = useRef(new TtsPlaybackQueue());
+  const playbackQueueRef = useRef(new TtsPlaybackQueue({ onPlaybackActiveChange: setTtsPlaybackActive }));
   const ttsEnabledRef = useRef(ttsEnabled);
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export function useRealtimeSession(
   const disconnect = () => {
     clientRef.current?.close();
     playbackQueueRef.current.clear();
+    setTtsPlaybackActive(false);
     setConnectionStatus("idle");
   };
 
@@ -90,6 +92,7 @@ export function useRealtimeSession(
   return {
     connectionStatus,
     subtitles,
+    ttsPlaybackActive,
     connect,
     disconnect,
     sendChunk,

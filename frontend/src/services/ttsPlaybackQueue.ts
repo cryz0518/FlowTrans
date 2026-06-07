@@ -10,11 +10,13 @@ type TtsPlaybackQueueItem = {
 type TtsPlaybackQueueOptions = {
   synthesizeTts?: (text: string) => Promise<TtsAudioResult>;
   playAudio?: (audio: Blob) => Promise<void>;
+  onPlaybackActiveChange?: (active: boolean) => void;
 };
 
 export class TtsPlaybackQueue {
   private readonly synthesizeTts: (text: string) => Promise<TtsAudioResult>;
   private readonly playAudio: (audio: Blob) => Promise<void>;
+  private readonly onPlaybackActiveChange?: (active: boolean) => void;
   private readonly queuedEventIds = new Set<string>();
   private queue: TtsPlaybackQueueItem[] = [];
   private processing: Promise<void> | null = null;
@@ -22,6 +24,7 @@ export class TtsPlaybackQueue {
   constructor(options: TtsPlaybackQueueOptions = {}) {
     this.synthesizeTts = options.synthesizeTts ?? defaultSynthesizeTts;
     this.playAudio = options.playAudio ?? playBlobAudio;
+    this.onPlaybackActiveChange = options.onPlaybackActiveChange;
   }
 
   enqueue(eventId: string, text: string) {
@@ -44,21 +47,26 @@ export class TtsPlaybackQueue {
   }
 
   private async processQueue() {
-    while (this.queue.length > 0) {
-      const item = this.queue.shift();
-      if (!item) {
-        continue;
-      }
+    this.onPlaybackActiveChange?.(true);
+    try {
+      while (this.queue.length > 0) {
+        const item = this.queue.shift();
+        if (!item) {
+          continue;
+        }
 
-      try {
-        const result = await item.audio;
-        await this.playAudio(result.audio);
-      } catch (error) {
-        console.warn("TTS playback skipped", error);
-        continue;
+        try {
+          const result = await item.audio;
+          await this.playAudio(result.audio);
+        } catch (error) {
+          console.warn("TTS playback skipped", error);
+          continue;
+        }
       }
+    } finally {
+      this.onPlaybackActiveChange?.(false);
+      this.processing = null;
     }
-    this.processing = null;
   }
 }
 

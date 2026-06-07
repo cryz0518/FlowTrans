@@ -39,6 +39,21 @@ describe("synthesizeTts", () => {
     expect(result.sampleRate).toBe(24000);
   });
 
+  it("uses the backend API host when running from an Electron file page", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(["audio-bytes"], { type: "audio/mpeg" }), {
+        status: 200,
+        headers: { "Content-Type": "audio/mpeg" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", new URL("file:///D:/code/FlowTrans/frontend/dist/index.html"));
+
+    await synthesizeTts("translated subtitle");
+
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:8000/api/tts/synthesize", expect.any(Object));
+  });
+
   it("rejects blank text without sending a request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

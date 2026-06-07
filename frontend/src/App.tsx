@@ -5,19 +5,26 @@ import { StatusBar } from "./components/StatusBar";
 import { SubtitlePanel } from "./components/SubtitlePanel";
 import { useAudioCapture } from "./hooks/useAudioCapture";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
+import { shouldSendCapturedAudio } from "./services/audioSendGate";
 import type { InputSource } from "./types/events";
 
 export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const chunkIndexRef = useRef(0);
+  const ttsPlaybackActiveRef = useRef(false);
   const session = useRealtimeSession("ws://127.0.0.1:8000/ws/realtime", { ttsEnabled });
   const capture = useAudioCapture();
   const isConnected = session.connectionStatus === "connected";
+  ttsPlaybackActiveRef.current = session.ttsPlaybackActive;
 
   const start = async () => {
     session.connect();
     await capture.start(inputSource, (audio) => {
+      if (!shouldSendCapturedAudio(inputSource, ttsPlaybackActiveRef.current)) {
+        return;
+      }
+
       session.sendChunk({
         session_id: "browser-session",
         chunk_index: chunkIndexRef.current,
