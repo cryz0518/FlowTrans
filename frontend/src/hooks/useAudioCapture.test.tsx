@@ -30,10 +30,15 @@ function installAudioMocks(sampleRate = 48000) {
       close = close;
     },
   );
+  const stream = {
+    getTracks: () => [{ stop: trackStop }],
+    getAudioTracks: () => [{ stop: trackStop }],
+  };
+
   vi.stubGlobal("navigator", {
     mediaDevices: {
-      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: trackStop }] }),
-      getDisplayMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: trackStop }] }),
+      getUserMedia: vi.fn().mockResolvedValue(stream),
+      getDisplayMedia: vi.fn().mockResolvedValue(stream),
     },
   });
 
@@ -117,6 +122,44 @@ describe("useAudioCapture", () => {
     expect(trackStop).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
     expect(result.current.captureStatus).toBe("idle");
+    vi.unstubAllGlobals();
+  });
+
+  it("stores capture error details when media permission fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn().mockRejectedValue(new Error("Permission denied")),
+      },
+    });
+    const { result } = renderHook(() => useAudioCapture());
+
+    await act(async () => {
+      await result.current.start("microphone", vi.fn());
+    });
+
+    expect(result.current.captureStatus).toBe("error");
+    expect(result.current.captureError).toBe("Permission denied");
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("reports a clear error when system capture has no audio track", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getDisplayMedia: vi.fn().mockResolvedValue({ getTracks: () => [], getAudioTracks: () => [] }),
+      },
+    });
+    const { result } = renderHook(() => useAudioCapture());
+
+    await act(async () => {
+      await result.current.start("system", vi.fn());
+    });
+
+    expect(result.current.captureStatus).toBe("error");
+    expect(result.current.captureError).toBe("System audio capture returned no audio track");
+    errorSpy.mockRestore();
     vi.unstubAllGlobals();
   });
 });

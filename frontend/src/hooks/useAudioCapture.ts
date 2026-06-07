@@ -21,6 +21,7 @@ const SCRIPT_PROCESSOR_SIZE = 4096;
 
 export function useAudioCapture() {
   const [captureStatus, setCaptureStatus] = useState<CaptureStatus>("idle");
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -43,10 +44,14 @@ export function useAudioCapture() {
 
   const start = async (source: InputSource, onChunk: (chunk: PcmAudioChunk) => void) => {
     try {
+      setCaptureError(null);
       const stream =
         source === "system"
           ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
           : await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (stream.getAudioTracks().length === 0) {
+        throw new Error(source === "system" ? "System audio capture returned no audio track" : "Microphone capture returned no audio track");
+      }
       streamRef.current = stream;
 
       const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -82,7 +87,10 @@ export function useAudioCapture() {
       sourceRef.current = mediaSource;
       processorRef.current = processor;
       setCaptureStatus("recording");
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Audio capture failed", error);
+      setCaptureError(message);
       setCaptureStatus("error");
     }
   };
@@ -98,6 +106,7 @@ export function useAudioCapture() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     pendingSamplesRef.current = [];
+    setCaptureError(null);
     void audioContext?.close();
     audioContextRef.current = null;
     setCaptureStatus("idle");
@@ -105,6 +114,7 @@ export function useAudioCapture() {
 
   return {
     captureStatus,
+    captureError,
     flushPcm,
     start,
     stop,
