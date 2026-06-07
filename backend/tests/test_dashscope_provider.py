@@ -467,6 +467,43 @@ def test_dashscope_provider_rejects_empty_tts_text() -> None:
         provider.synthesize_speech(" ")
 
 
+def test_dashscope_provider_generates_meeting_minutes_with_qwen() -> None:
+    http_client = FakeHttpClient(
+        FakeResponse(
+            200,
+            {"output": {"text": "# 会议纪要\n\n## 要点摘要\n- 已确认下一步计划"}},
+        )
+    )
+    provider = DashScopeProvider(api_key="test-key", http_client=http_client)
+
+    markdown = provider.generate_meeting_minutes(
+        [
+            {
+                "source_text": "We confirmed the next plan.",
+                "translated_text": "我们确认了下一步计划。",
+            }
+        ]
+    )
+
+    assert markdown == "# 会议纪要\n\n## 要点摘要\n- 已确认下一步计划"
+    request = http_client.requests[0]
+    assert request["json"]["model"] == "qwen-plus"
+    prompt = request["json"]["messages"][1]["content"]
+    assert "请基于以下实时同传字幕生成中文会议纪要" in prompt
+    assert "英文：We confirmed the next plan." in prompt
+    assert "中文：我们确认了下一步计划。" in prompt
+
+
+def test_dashscope_provider_rejects_empty_meeting_minutes_input() -> None:
+    provider = DashScopeProvider(
+        api_key="test-key",
+        http_client=FakeHttpClient(FakeResponse(200, {"output": {"text": "unused"}})),
+    )
+
+    with pytest.raises(ProviderRuntimeError, match="Meeting minutes subtitles must not be empty"):
+        provider.generate_meeting_minutes([])
+
+
 @pytest.mark.asyncio
 async def test_dashscope_provider_closes_asr_session() -> None:
     asr_session = FakeAsrSession(None)

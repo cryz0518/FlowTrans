@@ -240,6 +240,42 @@ class DashScopeProvider:
             sample_rate=self._tts_sample_rate,
         )
 
+    def generate_meeting_minutes(self, subtitles: list[dict[str, str]]) -> str:
+        usable_subtitles = [
+            {
+                "source_text": item.get("source_text", "").strip(),
+                "translated_text": item.get("translated_text", "").strip(),
+            }
+            for item in subtitles
+            if item.get("source_text", "").strip() or item.get("translated_text", "").strip()
+        ]
+        if not usable_subtitles:
+            raise ProviderRuntimeError("Meeting minutes subtitles must not be empty")
+
+        transcript_lines = []
+        for index, item in enumerate(usable_subtitles, start=1):
+            transcript_lines.append(
+                f"{index}. 英文：{item['source_text']}\n   中文：{item['translated_text']}"
+            )
+        prompt = "\n".join(
+            [
+                "请基于以下实时同传字幕生成中文会议纪要。",
+                "要求：",
+                "1. 使用 Markdown。",
+                "2. 必须包含：# 会议纪要、## 会议主题、## 要点摘要、## 行动项、## 原文依据。",
+                "3. 要点摘要要合并重复信息，不要逐句机械复述。",
+                "4. 行动项如果没有明确负责人或截止时间，请写“暂无明确行动项”。",
+                "5. 原文依据保留关键中英文依据，便于用户核对。",
+                "",
+                "字幕：",
+                *transcript_lines,
+            ]
+        )
+        try:
+            return self._call_qwen(prompt)
+        except ProviderRuntimeError as exc:
+            raise ProviderRuntimeError(f"DashScope meeting minutes request failed: {exc}") from exc
+
     async def close(self) -> None:
         await self._asr_session.close()
 

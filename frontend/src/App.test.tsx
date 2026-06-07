@@ -2,7 +2,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { generateMeetingMinutes } from "./services/meetingMinutesClient";
 import type { FlowTransDesktopApi } from "./types/desktop";
+
+vi.mock("./services/meetingMinutesClient", () => ({
+  generateMeetingMinutes: vi.fn(async () => "# 会议纪要\n\n## 要点摘要\n- 已生成"),
+}));
 
 function createDesktopApiMock(overrides: Partial<FlowTransDesktopApi> = {}): FlowTransDesktopApi {
   return {
@@ -154,5 +159,27 @@ describe("App", () => {
 
     expect(window.confirm).toHaveBeenCalledWith("是否要生成会议纪要？");
     expect(screen.getByRole("heading", { name: "会议纪要" })).toBeInTheDocument();
+  });
+
+  it("renders AI generated meeting minutes after generation finishes", async () => {
+    vi.useFakeTimers();
+    installAudioMocks();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "开始" }));
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "停止" }));
+    });
+    await act(async () => {
+      vi.runAllTimers();
+      await Promise.resolve();
+    });
+
+    expect(generateMeetingMinutes).toHaveBeenCalled();
+    expect(screen.getByText(/已生成/)).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

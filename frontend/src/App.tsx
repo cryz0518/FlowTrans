@@ -8,7 +8,8 @@ import { useAudioCapture } from "./hooks/useAudioCapture";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import { shouldSendCapturedAudio } from "./services/audioSendGate";
 import { toFloatingSubtitleSnapshot } from "./services/floatingSubtitles";
-import { createMeetingMinutesMarkdown, downloadMeetingMinutes } from "./services/meetingMinutes";
+import { downloadMeetingMinutes } from "./services/meetingMinutes";
+import { generateMeetingMinutes as generateMeetingMinutesWithAi } from "./services/meetingMinutesClient";
 import "./types/desktop";
 import type { InputSource } from "./types/events";
 
@@ -85,9 +86,20 @@ export function App() {
     setMeetingMinutesStatus("generating");
     setMeetingMinutesProgress(35);
 
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
+      try {
+        const markdown = await generateMeetingMinutesWithAi(session.subtitles);
+        setMeetingMinutesContent(markdown);
+      } catch (error) {
+        setMeetingMinutesContent(
+          [
+            "# 会议纪要生成失败",
+            "",
+            error instanceof Error ? error.message : "Meeting minutes generation failed",
+          ].join("\n"),
+        );
+      }
       setMeetingMinutesProgress(100);
-      setMeetingMinutesContent(createMeetingMinutesMarkdown(session.subtitles));
       setMeetingMinutesStatus("ready");
     }, 200);
   }, [session.subtitles]);

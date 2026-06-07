@@ -2,11 +2,14 @@ import base64
 
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import create_app
 from app.providers.dashscope_provider import ProviderRuntimeError
 
 
-def test_demo_flow_emits_partial_final_and_revision() -> None:
+def test_demo_flow_emits_partial_final_and_revision(monkeypatch) -> None:
+    monkeypatch.setenv("PROVIDER_MODE", "fake")
+    get_settings.cache_clear()
     client = TestClient(create_app())
     chunks = [
         {
@@ -35,6 +38,7 @@ def test_demo_flow_emits_partial_final_and_revision() -> None:
 
     assert first["events"][0]["event_type"] == "partial"
     assert [event["event_type"] for event in second["events"]] == ["final", "revision"]
+    get_settings.cache_clear()
 
 
 def test_realtime_returns_provider_error_and_keeps_connection(monkeypatch) -> None:
