@@ -147,6 +147,7 @@ export function App() {
           onSourceChange={setInputSource}
           onTtsChange={setTtsEnabled}
           onFloatingChange={setFloatingWindowEnabled}
+          onTranslationOpen={() => setActiveView("subtitles")}
           onMeetingMinutesOpen={() => setActiveView("minutes")}
           onStart={start}
           onStop={stop}

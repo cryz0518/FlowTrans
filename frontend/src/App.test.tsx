@@ -56,7 +56,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "FlowTrans" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(screen.getAllByRole("button")).toHaveLength(5);
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   });
 
@@ -129,6 +129,15 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "会议纪要" }));
 
     expect(screen.getByRole("heading", { name: "会议纪要" })).toBeInTheDocument();
+  });
+
+  it("returns to the translation view from the meeting minutes view", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "会议纪要" }));
+    fireEvent.click(screen.getByRole("button", { name: "实时翻译" }));
+
+    expect(screen.getByText("中文将在这里实时显示")).toBeInTheDocument();
   });
 
   it("asks to generate meeting minutes after stopping and switches to the minutes view", async () => {
