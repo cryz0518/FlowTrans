@@ -1,20 +1,43 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ControlPanel } from "./components/ControlPanel";
+import { MeetingMinutesPanel } from "./components/MeetingMinutesPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SubtitlePanel } from "./components/SubtitlePanel";
 import { useAudioCapture } from "./hooks/useAudioCapture";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import { shouldSendCapturedAudio } from "./services/audioSendGate";
 import { toFloatingSubtitleSnapshot } from "./services/floatingSubtitles";
+import { downloadMeetingMinutes } from "./services/meetingMinutes";
+import { generateMeetingMinutes as generateMeetingMinutesWithAi } from "./services/meetingMinutesClient";
+import {
+  createMeetingMinutesHistoryRecord,
+  deleteMeetingMinutesHistoryRecord,
+  loadMeetingMinutesHistory,
+  saveMeetingMinutesHistoryRecord,
+  type MeetingMinutesHistoryRecord,
+} from "./services/meetingMinutesHistory";
 import "./types/desktop";
 import type { InputSource } from "./types/events";
+
+type ActiveView = "subtitles" | "minutes";
+type MeetingMinutesStatus = "idle" | "generating" | "ready";
 
 export function App() {
   const [inputSource, setInputSource] = useState<InputSource>("microphone");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [floatingEnabled, setFloatingEnabled] = useState(false);
   const [runningRequested, setRunningRequested] = useState(false);
+  const [activeView, setActiveView] = useState<ActiveView>("subtitles");
+  const [meetingMinutesStatus, setMeetingMinutesStatus] = useState<MeetingMinutesStatus>("idle");
+  const [meetingMinutesProgress, setMeetingMinutesProgress] = useState(0);
+  const [meetingMinutesContent, setMeetingMinutesContent] = useState("");
+  const [meetingMinutesHistory, setMeetingMinutesHistory] = useState<MeetingMinutesHistoryRecord[]>(() =>
+    loadMeetingMinutesHistory(),
+  );
+  const [selectedMeetingMinutesHistoryId, setSelectedMeetingMinutesHistoryId] = useState<string | null>(
+    () => loadMeetingMinutesHistory()[0]?.id ?? null,
+  );
   const chunkIndexRef = useRef(0);
   const ttsPlaybackActiveRef = useRef(false);
   const session = useRealtimeSession("ws://127.0.0.1:8000/ws/realtime", { ttsEnabled });
@@ -71,12 +94,84 @@ export function App() {
     });
   }, [capture, inputSource, session]);
 
-  const stop = useCallback(() => {
+  const generateMeetingMinutes = useCallback(() => {
+    setActiveView("minutes");
+    setMeetingMinutesStatus("generating");
+    setMeetingMinutesProgress(35);
+    setSelectedMeetingMinutesHistoryId(null);
+
+    window.setTimeout(async () => {
+      try {
+        const markdown = await generateMeetingMinutesWithAi(session.subtitles);
+        const record = createMeetingMinutesHistoryRecord({
+          markdown,
+          subtitles: session.subtitles,
+        });
+        const nextHistory = saveMeetingMinutesHistoryRecord(record);
+        setMeetingMinutesHistory(nextHistory);
+        setSelectedMeetingMinutesHistoryId(record.id);
+        setMeetingMinutesContent(markdown);
+      } catch (error) {
+        setMeetingMinutesContent(
+          [
+            "# 会议纪要生成失败",
+            "",
+            error instanceof Error ? error.message : "Meeting minutes generation failed",
+          ].join("\n"),
+        );
+      }
+      setMeetingMinutesProgress(100);
+      setMeetingMinutesStatus("ready");
+    }, 200);
+  }, [session.subtitles]);
+
+  const saveMeetingMinutes = useCallback(() => {
+    if (meetingMinutesContent) {
+      downloadMeetingMinutes(meetingMinutesContent);
+    }
+  }, [meetingMinutesContent]);
+
+  const selectMeetingMinutesHistory = useCallback(
+    (id: string) => {
+      const record = meetingMinutesHistory.find((item) => item.id === id);
+      if (!record) {
+        return;
+      }
+
+      setSelectedMeetingMinutesHistoryId(id);
+      setMeetingMinutesContent(record.minutesMarkdown);
+      setMeetingMinutesProgress(100);
+      setMeetingMinutesStatus("ready");
+    },
+    [meetingMinutesHistory],
+  );
+
+  const deleteMeetingMinutesHistory = useCallback(
+    (id: string) => {
+      const nextHistory = deleteMeetingMinutesHistoryRecord(id);
+      setMeetingMinutesHistory(nextHistory);
+
+      if (selectedMeetingMinutesHistoryId === id) {
+        const nextRecord = nextHistory[0] ?? null;
+        setSelectedMeetingMinutesHistoryId(nextRecord?.id ?? null);
+        setMeetingMinutesContent(nextRecord?.minutesMarkdown ?? "");
+        setMeetingMinutesStatus(nextRecord ? "ready" : "idle");
+        setMeetingMinutesProgress(nextRecord ? 100 : 0);
+      }
+    },
+    [selectedMeetingMinutesHistoryId],
+  );
+
+  const stop = useCallback((options: { askMeetingMinutes?: boolean } = {}) => {
     setRunningRequested(false);
     capture.stop();
     session.disconnect();
     chunkIndexRef.current = 0;
-  }, [capture, session]);
+
+    if (options.askMeetingMinutes !== false && window.confirm("是否要生成会议纪要？")) {
+      generateMeetingMinutes();
+    }
+  }, [capture, generateMeetingMinutes, session]);
 
   useEffect(() => {
     if (!desktopControlsAvailable) {
@@ -87,7 +182,7 @@ export function App() {
       if (command === "start") {
         void start();
       } else if (command === "stop") {
-        stop();
+        stop({ askMeetingMinutes: false });
       } else if (command.type === "tts") {
         setTtsEnabled(command.enabled);
       }
@@ -116,10 +211,26 @@ export function App() {
           onSourceChange={setInputSource}
           onTtsChange={setTtsEnabled}
           onFloatingChange={setFloatingWindowEnabled}
+          onTranslationOpen={() => setActiveView("subtitles")}
+          onMeetingMinutesOpen={() => setActiveView("minutes")}
           onStart={start}
           onStop={stop}
         />
-        <SubtitlePanel subtitles={session.subtitles} />
+        {activeView === "minutes" ? (
+          <MeetingMinutesPanel
+            status={meetingMinutesStatus}
+            progress={meetingMinutesProgress}
+            content={meetingMinutesContent}
+            historyRecords={meetingMinutesHistory}
+            selectedHistoryId={selectedMeetingMinutesHistoryId}
+            onGenerate={generateMeetingMinutes}
+            onSave={saveMeetingMinutes}
+            onHistorySelect={selectMeetingMinutesHistory}
+            onHistoryDelete={deleteMeetingMinutesHistory}
+          />
+        ) : (
+          <SubtitlePanel subtitles={session.subtitles} />
+        )}
       </div>
     </main>
   );
