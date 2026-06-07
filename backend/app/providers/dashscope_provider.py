@@ -1,9 +1,14 @@
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from app.providers.dashscope_asr import DashScopeAsrSession
+
+PARTIAL_TRANSLATION_MIN_TEXT_GROWTH = 12
+PARTIAL_TRANSLATION_MIN_CHARS = 6
+PARTIAL_TRANSLATION_MIN_WORDS = 2
 
 
 class MissingDashScopeApiKey(RuntimeError):
@@ -106,6 +111,8 @@ class DashScopeProvider:
         self._tts_sample_rate = tts_sample_rate
         self._http_client = http_client or httpx.Client()
         self._tts_synthesizer = tts_synthesizer or DashScopeTtsSynthesizer()
+        self._last_partial_source = ""
+        self._last_partial_translation = ""
         self._asr_session = asr_session or DashScopeAsrSession(
             api_key=api_key,
             model=asr_model,
@@ -155,7 +162,7 @@ class DashScopeProvider:
         if transcript is None:
             return None
 
-        translated_text = self._translate_speech_text(transcript.text, is_final=transcript.is_final)
+        translated_text = await self._translate_speech_text_async(transcript.text, is_final=transcript.is_final)
         return DashScopeProviderResult(
             source_text=transcript.text,
             translated_text=translated_text,
@@ -260,6 +267,8 @@ class DashScopeProvider:
         return getattr(response, "text", str(payload))
 
     def _translate_speech_text(self, source_text: str, *, is_final: bool) -> str:
+        if not is_final and not self._should_translate_partial(source_text):
+            return self._last_partial_translation
         self._next_text_model = self._text_model if is_final else self._realtime_text_model
         if is_final:
             instruction = (
@@ -273,7 +282,36 @@ class DashScopeProvider:
                 "It may be incomplete, so keep the translation natural but easy to revise later. "
                 "Only output the Chinese translation:"
             )
-        return self._call_qwen(f"{instruction}\n{source_text}")
+        translation = self._call_qwen(f"{instruction}\n{source_text}")
+        if is_final:
+            self._last_partial_source = ""
+            self._last_partial_translation = ""
+        else:
+            self._last_partial_source = source_text
+            self._last_partial_translation = translation
+        return translation
+
+    async def _translate_speech_text_async(self, source_text: str, *, is_final: bool) -> str:
+        return await asyncio.to_thread(self._translate_speech_text, source_text, is_final=is_final)
+
+    def _should_translate_partial(self, source_text: str) -> bool:
+        current = self._normalize_partial_source(source_text)
+        if self._is_partial_too_short(current):
+            return False
+        if not self._last_partial_translation:
+            return True
+        previous = self._normalize_partial_source(self._last_partial_source)
+        if current == previous:
+            return False
+        return len(current) - len(previous) >= PARTIAL_TRANSLATION_MIN_TEXT_GROWTH
+
+    def _normalize_partial_source(self, source_text: str) -> str:
+        return source_text.strip().rstrip(".,!?;:").strip().lower()
+
+    def _is_partial_too_short(self, source_text: str) -> bool:
+        if len(source_text) < PARTIAL_TRANSLATION_MIN_CHARS:
+            return True
+        return len(source_text.split()) < PARTIAL_TRANSLATION_MIN_WORDS
 
     def _call_qwen(self, prompt: str) -> str:
         model = self._next_text_model

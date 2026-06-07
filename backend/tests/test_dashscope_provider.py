@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 import pytest
 
 from app.providers.dashscope_asr import AsrTranscript
@@ -38,24 +41,39 @@ class FakeHttpClient:
         return self.response
 
 
+class SlowFakeHttpClient(FakeHttpClient):
+    def __init__(self, response: FakeResponse, delay_seconds: float) -> None:
+        super().__init__(response)
+        self.delay_seconds = delay_seconds
+
+    def post(self, url: str, headers: dict, json: dict, timeout: float) -> FakeResponse:
+        time.sleep(self.delay_seconds)
+        return super().post(url, headers, json, timeout)
+
+
 class FakeAsrSession:
-    def __init__(self, transcript: AsrTranscript | None) -> None:
-        self.transcript = transcript
+    def __init__(self, transcript: AsrTranscript | None | list[AsrTranscript | None]) -> None:
+        self.transcripts = transcript if isinstance(transcript, list) else [transcript]
         self.sent: list[dict] = []
         self.closed = False
 
     async def send_audio(self, audio: bytes, mime_type: str) -> AsrTranscript | None:
         self.sent.append({"audio": audio, "mime_type": mime_type})
-        return self.transcript
+        return self._next_transcript()
 
     async def append_audio(self, audio: bytes, mime_type: str) -> None:
         self.sent.append({"audio": audio, "mime_type": mime_type})
 
     async def receive_transcript(self) -> AsrTranscript | None:
-        return self.transcript
+        return self._next_transcript()
 
     async def close(self) -> None:
         self.closed = True
+
+    def _next_transcript(self) -> AsrTranscript | None:
+        if len(self.transcripts) > 1:
+            return self.transcripts.pop(0)
+        return self.transcripts[0]
 
 
 class FakeTtsSynthesizer:
@@ -209,6 +227,101 @@ async def test_dashscope_provider_receives_transcript_translation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dashscope_provider_does_not_block_event_loop_while_translating_partial() -> None:
+    http_client = SlowFakeHttpClient(FakeResponse(200, {"output": {"text": "partial translation"}}), 0.05)
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(AsrTranscript(text="Welcome to FlowTrans.", is_final=False)),
+    )
+    translation_task = asyncio.create_task(provider.receive_transcript_translation())
+    await asyncio.sleep(0.01)
+
+    assert translation_task.done() is False
+    result = await translation_task
+    assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_reuses_recent_partial_translation_for_small_text_changes() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "两个男人"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(
+            [
+                AsrTranscript(text="Two men", is_final=False),
+                AsrTranscript(text="Two men.", is_final=False),
+            ]
+        ),
+    )
+
+    first = await provider.receive_transcript_translation()
+    second = await provider.receive_transcript_translation()
+
+    assert first is not None
+    assert first.translated_text == "两个男人"
+    assert second is not None
+    assert second.source_text == "Two men."
+    assert second.translated_text == "两个男人"
+    assert len(http_client.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_skips_too_short_partial_translation_until_text_is_useful() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "两个男人"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(
+            [
+                AsrTranscript(text="Two", is_final=False),
+                AsrTranscript(text="Two men", is_final=False),
+            ]
+        ),
+    )
+
+    first = await provider.receive_transcript_translation()
+    second = await provider.receive_transcript_translation()
+
+    assert first is not None
+    assert first.translated_text == ""
+    assert second is not None
+    assert second.translated_text == "两个男人"
+    assert len(http_client.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_dashscope_provider_translates_partial_when_text_grows_enough() -> None:
+    http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "partial translation"}}))
+    provider = DashScopeProvider(
+        api_key="test-key",
+        realtime_text_model="qwen-turbo",
+        text_model="qwen-plus",
+        http_client=http_client,
+        asr_session=FakeAsrSession(
+            [
+                AsrTranscript(text="Two men", is_final=False),
+                AsrTranscript(text="Two men who have been best friends", is_final=False),
+            ]
+        ),
+    )
+
+    await provider.receive_transcript_translation()
+    result = await provider.receive_transcript_translation()
+
+    assert result is not None
+    assert result.translated_text == "partial translation"
+    assert len(http_client.requests) == 2
+
+
+@pytest.mark.asyncio
 async def test_dashscope_provider_receives_final_transcript_translation_with_stable_model() -> None:
     http_client = FakeHttpClient(FakeResponse(200, {"output": {"text": "translated"}}))
     provider = DashScopeProvider(
@@ -252,7 +365,7 @@ async def test_dashscope_provider_uses_realtime_model_for_partial_transcript() -
         realtime_text_model="qwen-turbo",
         text_model="qwen-plus",
         http_client=http_client,
-        asr_session=FakeAsrSession(AsrTranscript(text="Welcome", is_final=False)),
+        asr_session=FakeAsrSession(AsrTranscript(text="Welcome everyone", is_final=False)),
     )
 
     result = await provider.transcribe_and_translate(
